@@ -82,74 +82,88 @@ class LevelGenerator {
       }
 
     } else if (w === 2) {
-      // World 2: More complex shapes
+      // World 2: More complex shapes (Increased Difficulty)
       if (l === 1) {
-        // Ring of 8 (radius 1.5)
-        for (let i = 0; i < 8; i++) {
-          const a = (i / 8) * Math.PI * 2;
-          coords.push(v3(Math.round(Math.cos(a) * 1.5), 0, Math.round(Math.sin(a) * 1.5)));
+        // Thick Ring of 16 (radius 2)
+        for (let r = 1; r <= 2; r++) {
+          for (let i = 0; i < 16; i++) {
+            const a = (i / 16) * Math.PI * 2;
+            coords.push(v3(Math.round(Math.cos(a) * (1.5 * r)), 0, Math.round(Math.sin(a) * (1.5 * r))));
+          }
         }
       } else if (l === 2) {
-        // Double cross / sword (15)
-        for (let y = -2; y <= 2; y++) coords.push(v3(0, y, 0));
-        for (let x = -2; x <= 2; x++) if (x !== 0) coords.push(v3(x, 1, 0));
-        for (let z = -2; z <= 2; z++) if (z !== 0) coords.push(v3(0, 1, z));
+        // Triple cross / giant sword (35 blocks)
+        for (let y = -3; y <= 3; y++) coords.push(v3(0, y, 0));
+        for (let x = -3; x <= 3; x++) if (x !== 0) coords.push(v3(x, 1, 0));
+        for (let z = -3; z <= 3; z++) if (z !== 0) coords.push(v3(0, 1, z));
+        for (let x = -2; x <= 2; x++) if (x !== 0) coords.push(v3(x, -1, 0));
       } else if (l === 3) {
-        // 4×4 base pyramid (30)
-        for (let x = -1.5; x <= 1.5; x++) for (let z = -1.5; z <= 1.5; z++) coords.push(v3(x, -1, z));
+        // 5x5 base stepped pyramid
+        for (let x = -2; x <= 2; x++) for (let z = -2; z <= 2; z++) coords.push(v3(x, -2, z));
+        for (let x = -1; x <= 1; x++) for (let z = -1; z <= 1; z++) coords.push(v3(x, -1, z));
         for (let x = -1; x <= 1; x++) for (let z = -1; z <= 1; z++) coords.push(v3(x, 0, z));
-        for (let x = -0.5; x <= 0.5; x++) for (let z = -0.5; z <= 0.5; z++) coords.push(v3(x, 1, z));
+        coords.push(v3(0, 1, 0));
         coords.push(v3(0, 2, 0));
       } else if (l === 4) {
-        // 3×3 cube + 4 antennas
-        for (let x = -1; x <= 1; x++) for (let y = -1; y <= 1; y++) for (let z = -1; z <= 1; z++)
-          coords.push(v3(x, y, z));
-        coords.push(v3(0, 2, 0)); coords.push(v3(0, -2, 0));
-        coords.push(v3(2, 0, 0)); coords.push(v3(-2, 0, 0));
+        // Solid 4x4x3 Core + antennas
+        for (let x = -1.5; x <= 1.5; x++) for (let y = -1; y <= 1; y++) for (let z = -1.5; z <= 1.5; z++)
+          coords.push(v3(Math.round(x), y, Math.round(z)));
+        coords.push(v3(0, 3, 0)); coords.push(v3(0, -3, 0));
+        coords.push(v3(3, 0, 0)); coords.push(v3(-3, 0, 0));
       } else {
-        // Egg capsule (26 blocks)
-        for (let y = -2; y <= 2; y++) {
-          const r = (y === -2 || y === 2) ? 1 : 1.5;
-          for (let i = 0; i < 6; i++) {
-            const a = (i / 6) * Math.PI * 2;
+        // Giant Egg capsule
+        for (let y = -3; y <= 3; y++) {
+          const r = (Math.abs(y) === 3) ? 1 : (Math.abs(y) === 2) ? 2 : 2.5;
+          const steps = Math.abs(y) === 3 ? 8 : 12;
+          for (let i = 0; i < steps; i++) {
+            const a = (i / steps) * Math.PI * 2;
             coords.push(v3(Math.round(Math.cos(a) * r), y, Math.round(Math.sin(a) * r)));
           }
         }
-        coords.push(v3(0, -3, 0)); coords.push(v3(0, 3, 0));
       }
 
     } else {
-      // World 3: High complexity
+      // World 3: High complexity & massive size
       if (l === 1) {
-        // Star (17)
+        // Giant Star
         coords.push(v3(0, 0, 0));
-        for (const d of DIRS) { coords.push(v3clone(d)); coords.push(v3scale(d, 2)); }
-        coords.push(v3(1, 1, 0)); coords.push(v3(-1, 1, 0));
-        coords.push(v3(1, -1, 0)); coords.push(v3(-1, -1, 0));
-      } else if (l === 2) {
-        // Satellite ring (23)
-        for (let y = -1; y <= 1; y++) coords.push(v3(0, y, 0));
-        for (let i = 0; i < 8; i++) {
-          const a = (i / 8) * Math.PI * 2;
-          coords.push(v3(Math.round(Math.cos(a) * 2), 0, Math.round(Math.sin(a) * 2)));
+        for (const d of DIRS) { coords.push(v3clone(d)); coords.push(v3scale(d, 2)); coords.push(v3scale(d, 3)); }
+        for (let i = -2; i <= 2; i+=4) for (let j = -2; j <= 2; j+=4) {
+          coords.push(v3(i/2, j/2, 0));
+          coords.push(v3(i, j, 0));
         }
-        for (const d of DIRS) { coords.push(v3scale(d, 3)); }
+      } else if (l === 2) {
+        // Thick Satellite ring 
+        for (let y = -2; y <= 2; y++) coords.push(v3(0, y, 0));
+        for (let r = 2; r <= 3; r++) {
+          for (let i = 0; i < 12; i++) {
+            const a = (i / 12) * Math.PI * 2;
+            coords.push(v3(Math.round(Math.cos(a) * r), 0, Math.round(Math.sin(a) * r)));
+          }
+        }
+        for (const d of DIRS) { coords.push(v3scale(d, 4)); }
       } else if (l === 3) {
-        // Hollow cage 3×3×3
-        for (let x = -1; x <= 1; x++) for (let y = -1; y <= 1; y++) for (let z = -1; z <= 1; z++)
-          if (!(x === 0 && y === 0 && z === 0)) coords.push(v3(x, y, z));
+        // 4x4x4 Hollow cube with inner core
+        for (let x = -1.5; x <= 1.5; x++) for (let y = -1.5; y <= 1.5; y++) for (let z = -1.5; z <= 1.5; z++) {
+          const rx = Math.round(x*2); const ry = Math.round(y*2); const rz = Math.round(z*2);
+          if (Math.abs(rx) === 3 || Math.abs(ry) === 3 || Math.abs(rz) === 3 || (rx===0&&ry===0&&rz===0)) {
+            coords.push(v3(rx, ry, rz));
+          }
+        }
       } else if (l === 4) {
-        // Helix spiral (24)
-        for (let i = 0; i < 24; i++) {
+        // Double Helix spiral
+        for (let i = 0; i < 36; i++) {
           const a = (i / 6) * Math.PI * 2;
-          coords.push(v3(Math.round(Math.cos(a) * 1.2), Math.round(i / 4) - 3, Math.round(Math.sin(a) * 1.2)));
+          coords.push(v3(Math.round(Math.cos(a) * 2), Math.round(i / 4) - 4, Math.round(Math.sin(a) * 2)));
+          coords.push(v3(Math.round(Math.cos(a + Math.PI) * 2), Math.round(i / 4) - 4, Math.round(Math.sin(a + Math.PI) * 2)));
         }
       } else {
-        // Mega station (38)
-        for (let x = -1; x <= 1; x++) for (let y = -1; y <= 1; y++) for (let z = -1; z <= 1; z++)
-          coords.push(v3(x, y, z));
-        [-4, -3, -2, 2, 3, 4].forEach(x => coords.push(v3(x, 0, 0)));
-        [-3, -2, 2, 3].forEach(y => coords.push(v3(0, y, 0)));
+        // Mega station - massive structure
+        for (let x = -2; x <= 2; x++) for (let y = -2; y <= 2; y++) for (let z = -2; z <= 2; z++)
+          if (Math.abs(x)+Math.abs(y)+Math.abs(z) <= 3) coords.push(v3(x, y, z));
+        [-5, -4, -3, 3, 4, 5].forEach(x => coords.push(v3(x, 0, 0)));
+        [-4, -3, 3, 4].forEach(y => coords.push(v3(0, y, 0)));
+        [-4, -3, 3, 4].forEach(z => coords.push(v3(0, 0, z)));
       }
     }
 

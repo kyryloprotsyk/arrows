@@ -160,20 +160,20 @@ function hue2rgb(p: number, q: number, t: number): number {
 
 /** Get a color palette for a block based on world + position hash. */
 export function getBlockPalette(worldIndex: number, posHash: number) {
-  // World hue bands (HSL hue angles)
+  // Premium modern game color palettes (Neon/Synthwave/Hyper-casual)
   const WORLD_HUES: Record<number, number[]> = {
-    1: [330, 355, 15, 42],  // Jelly Hills: pinks, corals, warm
-    2: [120, 145, 165, 185], // Dino Valley: greens, teals
-    3: [210, 235, 255, 275]  // Cosmo Station: blues, purples
+    1: [320, 335, 350, 15],  // Jelly Hills: Rich magentas, deep pinks, neon coral
+    2: [140, 160, 175, 190], // Dino Valley: Vivid teals, toxic greens, cyan
+    3: [240, 260, 275, 290]  // Cosmo Station: Deep indigo, cyberpunk purple, electric violet
   };
   const hues = WORLD_HUES[worldIndex] ?? WORLD_HUES[1];
   const h = hues[((posHash % hues.length) + hues.length) % hues.length];
 
   return {
-    top:   hslToInt(h, 90, 68),
-    left:  hslToInt(h, 80, 46),
-    right: hslToInt(h, 75, 30),
-    glow:  hslToInt(h, 100, 80)
+    top:   hslToInt(h, 95, 72),
+    left:  hslToInt(h, 88, 52),
+    right: hslToInt(h, 90, 35),
+    glow:  hslToInt(h, 100, 85)
   };
 }
 
