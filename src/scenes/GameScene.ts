@@ -596,10 +596,30 @@ export class GameScene extends Phaser.Scene {
     this.panY = Phaser.Math.Linear(this.panY, this.panTargetY, 0.12);
     this.camZoom = Phaser.Math.Linear(this.camZoom, this.zoomTarget, 0.1);
 
+    // Get pointer world coordinates for hover detection
+    const pointer = this.input.activePointer;
+    const wx = (pointer.x - this.centerX) / this.camZoom - this.panX;
+    const wy = (pointer.y - this.centerY) / this.camZoom - this.panY;
+
+    let hoveredBuddy: BuddyBlock | null = null;
+    if (pointer.active && pointer.y >= 80) {
+      const sorted = [...this.buddies]
+        .filter(b => b.state !== 'escaping')
+        .sort((a, b2) => b2.depth - a.depth);
+      for (const buddy of sorted) {
+        if (isPointInBlock(wx, wy, buddy.sx, buddy.sy)) {
+          hoveredBuddy = buddy;
+          break;
+        }
+      }
+    }
+
     // Update buddy animations
     const escaped: BuddyBlock[] = [];
     for (const b of this.buddies) {
       b.animT += dt;
+
+      const isHovered = (hoveredBuddy === b);
 
       if (b.type === 'rainbow') b.rainbowHue = (b.rainbowHue + dt * 0.4) % 1;
 
@@ -645,18 +665,27 @@ export class GameScene extends Phaser.Scene {
           b.jellyScalePerp = 1;
         }
       } else if (b.state === 'idle') {
-        const breathSpeed = 0.0035;
-        const breathAmp = 0.022; // 2.2% scale variation
-        const phaseOffset = (b.x * 3.5 + b.y * 7.1 + b.z * 11.3) * 0.4;
-        const breath = Math.sin(this.time.now * breathSpeed + phaseOffset) * breathAmp;
-
-        b.jellyScalePara = 1.0 + breath;
-        b.jellyScalePerp = 1.0 - breath;
-        b.jellyAngle = Math.PI / 2; // breathe along vertical/horizontal alignment
-
         const base = gridToScreen(b.x, b.y, b.z, this.rotState);
         b.sx = base.x;
         b.sy = base.y;
+
+        if (isHovered) {
+          // Organic jelly wiggle motion
+          const wobble = Math.sin(_time * 0.015) * 0.08;
+          b.jellyScalePara = Phaser.Math.Linear(b.jellyScalePara, 1.0 + wobble, 0.2);
+          b.jellyScalePerp = Phaser.Math.Linear(b.jellyScalePerp, 1.0 - wobble, 0.2);
+          b.jellyAngle = Phaser.Math.Linear(b.jellyAngle, Math.sin(_time * 0.01) * 0.06, 0.2);
+        } else {
+          // Default breathing wave
+          const breathSpeed = 0.0035;
+          const breathAmp = 0.022; // 2.2% scale variation
+          const phaseOffset = (b.x * 3.5 + b.y * 7.1 + b.z * 11.3) * 0.4;
+          const breath = Math.sin(this.time.now * breathSpeed + phaseOffset) * breathAmp;
+
+          b.jellyScalePara = Phaser.Math.Linear(b.jellyScalePara, 1.0 + breath, 0.1);
+          b.jellyScalePerp = Phaser.Math.Linear(b.jellyScalePerp, 1.0 - breath, 0.1);
+          b.jellyAngle = Phaser.Math.Linear(b.jellyAngle, Math.PI / 2, 0.1);
+        }
 
         // Blink logic
         b.blinkTimer -= dt;
@@ -666,8 +695,16 @@ export class GameScene extends Phaser.Scene {
           this.time.delayedCall(120, () => { b.isBlinking = false; });
         }
       } else if (b.state === 'locked') {
-        b.jellyScalePara = 1;
-        b.jellyScalePerp = 1;
+        if (isHovered) {
+          const wobble = Math.sin(_time * 0.015) * 0.04;
+          b.jellyScalePara = Phaser.Math.Linear(b.jellyScalePara, 1.0 + wobble, 0.2);
+          b.jellyScalePerp = Phaser.Math.Linear(b.jellyScalePerp, 1.0 - wobble, 0.2);
+          b.jellyAngle = Phaser.Math.Linear(b.jellyAngle, Math.sin(_time * 0.01) * 0.03, 0.2);
+        } else {
+          b.jellyScalePara = Phaser.Math.Linear(b.jellyScalePara, 1.0, 0.1);
+          b.jellyScalePerp = Phaser.Math.Linear(b.jellyScalePerp, 1.0, 0.1);
+          b.jellyAngle = Phaser.Math.Linear(b.jellyAngle, 0.0, 0.1);
+        }
       }
     }
 
@@ -882,48 +919,54 @@ export class GameScene extends Phaser.Scene {
 
     // ─── Arrow Direction Indicator ─────────────────────────────────────
     if (b.type !== 'chest') {
-      this.drawArrowIndicator(g, b, cx, cy);
+      this.drawArrowIndicator(g, b, cx, cy, transformer);
     }
   }
 
-  private drawArrowIndicator(g: Phaser.GameObjects.Graphics, b: BuddyBlock, cx: number, cy: number) {
-    // Project escape direction to screen and draw arrow above block
+  private drawArrowIndicator(
+    g: Phaser.GameObjects.Graphics,
+    b: BuddyBlock,
+    cx: number, cy: number,
+    transformer: (x: number, y: number) => { x: number; y: number }
+  ) {
+    // Project escape direction to screen
     const from = gridToScreen(b.x, b.y, b.z, this.rotState);
     const to   = gridToScreen(b.x + b.dir.x, b.y + b.dir.y, b.z + b.dir.z, this.rotState);
     const dx = to.x - from.x, dy = to.y - from.y;
     const len = Math.hypot(dx, dy) || 1;
     const nx = dx / len, ny = dy / len;
 
-    // Float offset: arrow hovers above block
-    const floatOff = Math.sin(this.time.now * 0.003 + b.x + b.z) * 4;
-    const ax = cx + nx * 22;
-    const ay = cy - TILE_H - 18 + floatOff;
+    // Place neon arrow inside the transformed block center
+    const ay = cy + 20;
+    const tPt = (x: number, y: number) => transformer(x, y);
 
-    // Arrow shaft
+    const pBase = tPt(cx - nx * 14, ay - ny * 14);
+    const pTip = tPt(cx + nx * 18, ay + ny * 18);
+    const pLeft = tPt(cx + nx * 4 - ny * 9, ay + ny * 4 + nx * 9);
+    const pRight = tPt(cx + nx * 4 + ny * 9, ay + ny * 4 - nx * 9);
+
     const col = b.type === 'rainbow' ? hslToInt(b.rainbowHue * 360, 100, 80) : b.palGlow;
 
-    // Glow passes
+    // Glowing chevron passes
     for (let pass = 0; pass < 3; pass++) {
-      g.lineStyle([5, 3, 1.5][pass], col, [0.12, 0.3, 0.7][pass]);
+      const alpha = [0.15, 0.35, 0.75][pass];
+      const width = [7, 4, 1.8][pass];
+      g.lineStyle(width, col, alpha);
+      
+      // Shaft
       g.beginPath();
-      g.moveTo(ax - nx * 10, ay - ny * 10);
-      g.lineTo(ax + nx * 10, ay + ny * 10);
+      g.moveTo(pBase.x, pBase.y);
+      g.lineTo(pTip.x, pTip.y);
+      g.strokePath();
+
+      // Head
+      g.beginPath();
+      g.moveTo(pTip.x, pTip.y);
+      g.lineTo(pLeft.x, pLeft.y);
+      g.moveTo(pTip.x, pTip.y);
+      g.lineTo(pRight.x, pRight.y);
       g.strokePath();
     }
-
-    // Arrowhead
-    const headAngle = Math.atan2(ny, nx);
-    const h1x = ax + nx * 12 + Math.cos(headAngle + Math.PI * 0.75) * 7;
-    const h1y = ay + ny * 12 + Math.sin(headAngle + Math.PI * 0.75) * 7;
-    const h2x = ax + nx * 12 + Math.cos(headAngle - Math.PI * 0.75) * 7;
-    const h2y = ay + ny * 12 + Math.sin(headAngle - Math.PI * 0.75) * 7;
-
-    g.fillStyle(col, 0.9);
-    g.fillTriangle(
-      ax + nx * 14, ay + ny * 14,
-      h1x, h1y,
-      h2x, h2y
-    );
   }
 
   // ═══════════════════════════════════════════════════════════════════════
@@ -1161,15 +1204,72 @@ export class GameScene extends Phaser.Scene {
   private drawBackground(W: number, H: number) {
     const g = this.bgGfx;
     g.clear();
-    // Grid dots
-    g.fillStyle(0x1a004f, 1);
-    g.fillRect(0, 0, W, H);
-    g.fillStyle(0xffffff, 0.04);
-    const grid = 40;
-    for (let x = 0; x < W; x += grid) for (let y = 0; y < H; y += grid)
-      g.fillCircle(x, y, 1.2);
-    // Center glow
-    g.fillStyle(hslToInt(225, 60, 12), 0.7);
-    g.fillCircle(W / 2, H / 2, Math.min(W, H) * 0.65);
+    
+    // Cyberpunk gradient background
+    const steps = 24;
+    for (let i = 0; i < steps; i++) {
+      const t = i / steps;
+      // Interpolate from deep dark black/purple to slightly lighter purple at the bottom
+      const r = Math.round(5 + t * 12);
+      const gv = 0;
+      const b = Math.round(12 + t * 24);
+      const color = (r << 16) | (gv << 8) | b;
+      g.fillStyle(color, 1);
+      g.fillRect(0, i * (H / steps), W, H / steps + 1);
+    }
+    
+    // Perspective grid floor (retro neon grid)
+    const horizonY = H * 0.42;
+    const vanishingX = W / 2;
+    
+    // Grid lines color based on world index (magenta, cyan, or purple)
+    const gridHues: Record<number, number> = { 1: 330, 2: 175, 3: 270, 4: 195, 5: 210, 6: 15 };
+    const wHue = gridHues[this.worldIndex] ?? 330;
+    const gridCol = hslToInt(wHue, 95, 60);
+
+    // Converging lines
+    g.lineStyle(1.5, gridCol, 0.14);
+    const lineCount = 14;
+    for (let i = 0; i <= lineCount; i++) {
+      const t = i / lineCount;
+      const startX = W * (t * 2.5 - 0.75); // wide bottom span
+      g.beginPath();
+      g.moveTo(vanishingX, horizonY);
+      g.lineTo(startX, H);
+      g.strokePath();
+    }
+    
+    // Horizontal lines with exponential spacing
+    const horizCount = 10;
+    for (let i = 0; i < horizCount; i++) {
+      const t = i / horizCount;
+      const y = horizonY + Math.pow(t, 2) * (H - horizonY);
+      const span = (y - horizonY) / (H - horizonY);
+      const leftX = vanishingX + (-0.75) * span * W * 2.5;
+      const rightX = vanishingX + (1.75) * span * W * 2.5;
+      
+      g.lineStyle(1.5, gridCol, 0.04 + t * 0.16);
+      g.beginPath();
+      g.moveTo(leftX, y);
+      g.lineTo(rightX, y);
+      g.strokePath();
+    }
+
+    // Grid dots (stars)
+    const grid = 50;
+    for (let x = 0; x < W + grid; x += grid) {
+      for (let y = 0; y < H + grid; y += grid) {
+        const distToCenter = Math.hypot(x - W / 2, y - H / 2);
+        const opacity = Math.max(0.02, 0.14 - (distToCenter / Math.max(W, H)) * 0.12);
+        g.fillStyle(0xffffff, opacity);
+        g.fillCircle(x, y, 1.2);
+      }
+    }
+    
+    // Dynamic world center glow
+    const worldHues: Record<number, number> = { 1: 330, 2: 165, 3: 270, 4: 175, 5: 195, 6: 10 };
+    const hue = worldHues[this.worldIndex] ?? 330;
+    g.fillStyle(hslToInt(hue, 95, 12), 0.70);
+    g.fillCircle(W / 2, H / 2, Math.min(W, H) * 0.72);
   }
 }

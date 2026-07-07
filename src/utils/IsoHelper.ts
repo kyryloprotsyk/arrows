@@ -103,24 +103,63 @@ export function drawIsoCube(
     g.fillPath();
   };
 
-  // 1. RIGHT face (x+ side) — darkest
-  g.fillStyle(rightCol, 1);
+  // Hidden back-bottom vertex (shifted down from top vertex A by bh)
+  let backX = cx, backY = cy - th + bh;
+  if (transformer) {
+    const tBack = transformer(backX, backY);
+    backX = tBack.x; backY = tBack.y;
+  }
+
+  // Draw hidden back faces first for realistic transparency
+  g.fillStyle(leftCol, 0.12);
+  fillPoly([topX, topY, leftX, leftY, lbX, lbY, backX, backY]);
+  
+  g.fillStyle(rightCol, 0.12);
+  fillPoly([topX, topY, rightX, rightY, rbX, rbY, backX, backY]);
+
+  g.fillStyle(topCol, 0.12);
+  fillPoly([backX, backY, lbX, lbY, bbX, bbY, rbX, rbY]);
+
+  // Draw back wireframe structure
+  g.lineStyle(1.2, 0xffffff, 0.08);
+  g.beginPath();
+  g.moveTo(backX, backY); g.lineTo(topX, topY);
+  g.moveTo(backX, backY); g.lineTo(lbX, lbY);
+  g.moveTo(backX, backY); g.lineTo(rbX, rbY);
+  g.strokePath();
+
+  // Draw inner glowing core
+  const scaleX = transformer ? Math.hypot(rightX - leftX, rightY - leftY) / (tw * 2) : 1;
+  const scaleY = transformer ? Math.hypot(bbY - topY, bbX - topX) / (th * 2 + bh) : 1;
+  const tPt = (x: number, y: number) => transformer ? transformer(x, y) : { x, y };
+
+  const coreCenter = tPt(cx, cy + bh / 2);
+  g.fillStyle(glowCol, 0.35);
+  g.fillEllipse(coreCenter.x, coreCenter.y, 22 * scaleX, 16 * scaleY);
+  g.fillStyle(0xffffff, 0.40);
+  g.fillEllipse(coreCenter.x, coreCenter.y, 10 * scaleX, 7 * scaleY);
+
+  // Draw front visible faces with glass transparency
+  g.fillStyle(rightCol, 0.72);
   fillPoly([rightX, rightY, botX, botY, bbX, bbY, rbX, rbY]);
 
-  // 2. LEFT face (z+ side) — medium
-  g.fillStyle(leftCol, 1);
+  g.fillStyle(leftCol, 0.72);
   fillPoly([leftX, leftY, botX, botY, bbX, bbY, lbX, lbY]);
 
-  // 3. TOP face — lightest
-  g.fillStyle(topCol, 1);
+  g.fillStyle(topCol, 0.78);
   fillPoly([topX, topY, rightX, rightY, botX, botY, leftX, leftY]);
 
+  // Top glossy highlights
+  g.fillStyle(0xffffff, 0.22);
+  const topHighlight = tPt(cx - 3, cy - th * 0.55);
+  g.fillEllipse(topHighlight.x, topHighlight.y, 12 * scaleX, 5 * scaleY);
+
   // Glossy glass reflection overlay (diagonal shine)
-  g.fillStyle(0xffffff, 0.2);
+  g.fillStyle(0xffffff, 0.12);
   fillPoly([topX, topY, (topX + rightX) / 2, (topY + rightY) / 2, (leftX + botX) / 2, (leftY + botY) / 2, leftX, leftY]);
 
   // White bevel highlight on the front-top edges
-  g.lineStyle(1.5, 0xffffff, 0.3);
+  g.lineStyle(1.5, 0xffffff, 0.32);
   g.beginPath();
   g.moveTo(leftX, leftY);
   g.lineTo(botX, botY);
