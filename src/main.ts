@@ -9,6 +9,18 @@ import { GameScene }        from './scenes/GameScene';
 import { VictoryScene }     from './scenes/VictoryScene';
 import { ShopScene }        from './scenes/ShopScene';
 
+/** Returns the true viewport size — respects dvh on iOS/Android. */
+function getViewport() {
+  // visualViewport is more reliable than innerWidth/innerHeight on mobile
+  const vvp = window.visualViewport;
+  return {
+    w: vvp ? vvp.width  : window.innerWidth,
+    h: vvp ? vvp.height : window.innerHeight
+  };
+}
+
+const { w, h } = getViewport();
+
 const config: Phaser.Types.Core.GameConfig = {
   type: Phaser.AUTO,
   parent: 'game-container',
@@ -17,8 +29,8 @@ const config: Phaser.Types.Core.GameConfig = {
   scale: {
     mode: Phaser.Scale.RESIZE,
     autoCenter: Phaser.Scale.CENTER_BOTH,
-    width: window.innerWidth,
-    height: window.innerHeight
+    width: w,
+    height: h
   },
   render: {
     antialias: true,
@@ -31,9 +43,19 @@ const config: Phaser.Types.Core.GameConfig = {
 
 const game = new Phaser.Game(config);
 
-// Handle resize
-window.addEventListener('resize', () => {
-  game.scale.resize(window.innerWidth, window.innerHeight);
+/** Resize handler — also fires on orientation change. */
+function onResize() {
+  const { w: nw, h: nh } = getViewport();
+  game.scale.resize(nw, nh);
+}
+
+window.addEventListener('resize', onResize);
+window.addEventListener('orientationchange', () => {
+  // Short delay gives the browser time to re-layout after rotation
+  setTimeout(onResize, 150);
 });
+
+// Also listen on visualViewport (handles soft-keyboard appearing/disappearing)
+window.visualViewport?.addEventListener('resize', onResize);
 
 console.log('🎮 Arrow Buddies 3D — Phaser Edition initialized!');

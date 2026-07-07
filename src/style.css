@@ -1,27 +1,51 @@
-/* Arrow Buddies 3D — Minimal CSS for Phaser canvas */
+/* Arrow Buddies 3D — Mobile-first CSS for Phaser canvas */
 *, *::before, *::after {
   margin: 0;
   padding: 0;
   box-sizing: border-box;
 }
 
-body, html {
+/* Full-bleed body — no scroll, no rubber-band, no text selection */
+html {
+  height: 100%;
+  height: -webkit-fill-available; /* iOS Safari full height */
+  overflow: hidden;
+}
+
+body {
   width: 100%;
   height: 100%;
+  height: 100dvh;               /* dynamic viewport: respects keyboard/notch */
   overflow: hidden;
   background: #0a001a;
-  touch-action: none;
+  touch-action: none;           /* disable browser pan/zoom on the whole body */
   user-select: none;
   -webkit-user-select: none;
+  overscroll-behavior: none;    /* prevent pull-to-refresh / over-scroll glow */
+  -webkit-tap-highlight-color: transparent;
+  -webkit-text-size-adjust: 100%;
 }
 
+/* Game container fills the safe area (notch-aware) */
 #game-container {
+  position: fixed;
+  inset: 0;
+  /* respect iOS notch / Android cutout */
+  padding:
+    env(safe-area-inset-top)
+    env(safe-area-inset-right)
+    env(safe-area-inset-bottom)
+    env(safe-area-inset-left);
   width: 100%;
   height: 100%;
 }
 
+/* Canvas always fills the container exactly — Phaser handles aspect ratio */
 #game-container canvas {
   display: block;
   width: 100% !important;
   height: 100% !important;
+  /* Crisp pixel rendering on high-DPR screens */
+  image-rendering: -webkit-optimize-contrast;
+  image-rendering: pixelated;
 }

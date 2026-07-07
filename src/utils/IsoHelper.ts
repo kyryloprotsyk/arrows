@@ -1,8 +1,36 @@
 /* IsoHelper.ts — Isometric math & rendering utilities */
 
-export const TILE_W = 52;   // Half tile width in screen pixels
-export const TILE_H = 26;   // Half tile height (2:1 ratio)
-export const BLOCK_H = 42;  // Cube vertical height in screen pixels
+// ── Responsive tile sizing ────────────────────────────────────────────────
+// Base sizes designed for a 375px-wide phone (iPhone SE).
+// We scale them proportionally to the screen's shortest dimension (vmin).
+const BASE_VMIN = 375;
+
+function getVmin(): number {
+  return Math.min(window.innerWidth, window.innerHeight);
+}
+
+/** Returns the current isometric tile scale factor (1.0 on a 375px-wide phone). */
+export function getTileScale(): number {
+  return Math.min(getVmin() / BASE_VMIN, 2.0); // cap at 2× for tablets
+}
+
+// Raw (design-space) constants — actual values multiply by getTileScale()
+const RAW_TILE_W = 52;
+const RAW_TILE_H = 26;
+const RAW_BLOCK_H = 42;
+
+/** Half tile width in screen pixels — scales with device. */
+export function getTileW(): number { return RAW_TILE_W * getTileScale(); }
+/** Half tile height in screen pixels — scales with device. */
+export function getTileH(): number { return RAW_TILE_H * getTileScale(); }
+/** Cube vertical height in screen pixels — scales with device. */
+export function getBlockH(): number { return RAW_BLOCK_H * getTileScale(); }
+
+// Legacy named exports kept for backward-compat (used in hot paths where
+// we already call getTileScale() once per frame, so reading the getter is fine).
+export const TILE_W = RAW_TILE_W;   // design-space constant — prefer getTileW()
+export const TILE_H = RAW_TILE_H;   // design-space constant — prefer getTileH()
+export const BLOCK_H = RAW_BLOCK_H; // design-space constant — prefer getBlockH()
 
 export interface Vec3 { x: number; y: number; z: number; }
 
@@ -16,9 +44,10 @@ export function gridToScreen(gx: number, gy: number, gz: number, rot = 0): { x: 
     case 2: [ix, iz] = [-gx, -gz];  break;
     case 3: [ix, iz] = [-gz, gx];   break;
   }
+  const tw = getTileW(), th = getTileH(), bh = getBlockH();
   return {
-    x: (ix - iz) * TILE_W,
-    y: (ix + iz) * TILE_H - gy * BLOCK_H
+    x: (ix - iz) * tw,
+    y: (ix + iz) * th - gy * bh
   };
 }
 
@@ -35,8 +64,8 @@ export function getDrawDepth(gx: number, gy: number, gz: number, rot = 0): numbe
 
 /** Hit test: is screen point (px, py) inside the isometric block hex whose top-center is at (cx, cy)? */
 export function isPointInBlock(px: number, py: number, cx: number, cy: number): boolean {
-  const tw = TILE_W, th = TILE_H, bh = BLOCK_H;
-  // Hexagonal outline of the full cube
+  const tw = getTileW(), th = getTileH(), bh = getBlockH();
+  // Hexagonal outline of the full cube (scaled with device)
   const poly = [
     cx - tw, cy,
     cx,      cy - th,
@@ -73,7 +102,7 @@ export function drawIsoCube(
   glowAlpha = 0.5,
   transformer?: CoordTransformer
 ) {
-  const tw = TILE_W, th = TILE_H, bh = BLOCK_H;
+  const tw = getTileW(), th = getTileH(), bh = getBlockH();
 
   // Shared vertex coordinates
   let topX = cx,      topY = cy - th;

@@ -133,6 +133,14 @@ export class GameScene extends Phaser.Scene {
 
     // BGM
     if (!GameData.muted.get()) audio.playBGM();
+
+    // ── Responsive: redraw background on orientation / resize ────────────
+    this.scale.on('resize', (gs: Phaser.Structs.Size) => {
+      const nW = gs.width, nH = gs.height;
+      this.centerX = nW / 2;
+      this.centerY = nH / 2;
+      this.drawBackground(nW, nH);
+    });
   }
 
   // ═══════════════════════════════════════════════════════════════════════
@@ -231,8 +239,9 @@ export class GameScene extends Phaser.Scene {
 
     // Pointer down
     this.input.on('pointerdown', (p: Phaser.Input.Pointer) => {
-      // Ignore HUD area
-      if (p.y < 80) return;
+      // Ignore HUD area (responsive height = 12% of vmin, min 44px)
+      const hudH = Math.max(44, Math.min(this.scale.width, this.scale.height) * 0.12);
+      if (p.y < hudH) return;
       this.isDragging = true;
       this.hasMoved = false;
       this.dragStartX = p.x;
@@ -591,10 +600,13 @@ export class GameScene extends Phaser.Scene {
   update(_time: number, delta: number) {
     const dt = Math.min(delta / 1000, 0.1);
 
-    // Smooth pan & zoom
-    this.panX = Phaser.Math.Linear(this.panX, this.panTargetX, 0.12);
-    this.panY = Phaser.Math.Linear(this.panY, this.panTargetY, 0.12);
-    this.camZoom = Phaser.Math.Linear(this.camZoom, this.zoomTarget, 0.1);
+    // Smooth pan & zoom — frame-rate independent (τ = time-constant in seconds)
+    // Equivalent to CSS: transition: all 0.12s ease-out
+    const panDecay  = 1 - Math.exp(-dt / 0.12);
+    const zoomDecay = 1 - Math.exp(-dt / 0.10);
+    this.panX  = Phaser.Math.Linear(this.panX,  this.panTargetX, panDecay);
+    this.panY  = Phaser.Math.Linear(this.panY,  this.panTargetY, panDecay);
+    this.camZoom = Phaser.Math.Linear(this.camZoom, this.zoomTarget, zoomDecay);
 
     // Get pointer world coordinates for hover detection
     const pointer = this.input.activePointer;
@@ -602,7 +614,8 @@ export class GameScene extends Phaser.Scene {
     const wy = (pointer.y - this.centerY) / this.camZoom - this.panY;
 
     let hoveredBuddy: BuddyBlock | null = null;
-    if (pointer.active && pointer.y >= 80) {
+    const hudHCheck = Math.max(44, Math.min(this.scale.width, this.scale.height) * 0.12);
+    if (pointer.active && pointer.y >= hudHCheck) {
       const sorted = [...this.buddies]
         .filter(b => b.state !== 'escaping')
         .sort((a, b2) => b2.depth - a.depth);
@@ -1086,44 +1099,63 @@ export class GameScene extends Phaser.Scene {
   // HUD
   // ═══════════════════════════════════════════════════════════════════════
   private setupHUD(W: number, H: number) {
+    // Compute responsive sizes from vmin (shortest screen edge)
+    const vmin = Math.min(W, H);
+    const hudH  = Math.max(44, vmin * 0.12);      // HUD bar height
+    const hudY  = hudH / 2;                        // vertical center of bar
+    const fs    = Math.round(Math.min(vmin * 0.048, 22)); // main HUD font
+    const comboFs = Math.round(Math.min(vmin * 0.1, 42)); // combo font
+    const msgFs   = Math.round(Math.min(vmin * 0.038, 16)); // tip font
+    const btnFs   = Math.round(Math.min(vmin * 0.072, 28)); // button emoji font
+    const pad   = Math.max(14, vmin * 0.04);       // horizontal padding
+
+    // Bottom safe area (for iOS home indicator etc.)
+    const safeBottom = 24;
+    const btnY = H - safeBottom - Math.max(24, vmin * 0.06);
+
     // HUD background bar
     this.hudBar = this.add.graphics().setDepth(20);
-    this.drawHUDBar(W);
+    this.drawHUDBar(W, hudH);
 
-    const fs = Math.min(W * 0.042, 22);
-
-    this.hudLevel = this.add.text(W / 2, 22, '', {
+    this.hudLevel = this.add.text(W / 2, hudY, '', {
       fontFamily: 'Fredoka', fontSize: fs + 'px', color: '#ffffff',
       shadow: { offsetX: 0, offsetY: 2, color: '#6600ff', blur: 10, fill: true }
     }).setOrigin(0.5).setDepth(21);
 
-    this.hudCoins = this.add.text(20, 22, '🪙 0', {
+    this.hudCoins = this.add.text(pad, hudY, '🪙 0', {
       fontFamily: 'Fredoka', fontSize: fs + 'px', color: '#ffe45e'
     }).setOrigin(0, 0.5).setDepth(21);
 
-    this.hudMoves = this.add.text(W - 20, 22, '⚡ 0', {
+    this.hudMoves = this.add.text(W - pad, hudY, '⚡ 0', {
       fontFamily: 'Fredoka', fontSize: fs + 'px', color: '#74c0fc'
     }).setOrigin(1, 0.5).setDepth(21);
 
     // Combo label
-    this.comboLabel = this.add.text(W / 2, H * 0.15, '', {
-      fontFamily: 'Fredoka', fontSize: '38px',
+    this.comboLabel = this.add.text(W / 2, H * 0.18, '', {
+      fontFamily: 'Fredoka', fontSize: comboFs + 'px',
       color: '#ffe45e', stroke: '#ffffff', strokeThickness: 3,
       shadow: { offsetX: 0, offsetY: 5, color: '#ff8800', blur: 20, fill: true }
     }).setOrigin(0.5).setDepth(21).setAlpha(0);
 
-    // Tutorial/message label
-    this.tutLabel = this.add.text(W / 2, H - 40, '', {
-      fontFamily: 'Fredoka', fontSize: '16px', color: '#ccbbff',
+    // Tutorial/message label — above the bottom buttons
+    this.tutLabel = this.add.text(W / 2, btnY - 36, '', {
+      fontFamily: 'Fredoka', fontSize: msgFs + 'px', color: '#ccbbff',
       backgroundColor: '#22004488', padding: { x: 12, y: 6 }
     }).setOrigin(0.5).setDepth(21).setAlpha(0);
 
-    // Buttons: Home, Reset, Rotate
-    const btnStyle = { fontFamily: 'Fredoka', fontSize: '22px', color: '#ffffff' };
-    const home  = this.add.text(W - 60, H - 50, '🏠', btnStyle).setDepth(21).setInteractive({ useHandCursor: true });
-    const reset = this.add.text(W - 110, H - 50, '🔄', btnStyle).setDepth(21).setInteractive({ useHandCursor: true });
-    const rotL  = this.add.text(15,  H / 2, '◀', { ...btnStyle, color: '#9b72ff' }).setDepth(21).setInteractive({ useHandCursor: true });
-    const rotR  = this.add.text(W - 15, H / 2, '▶', { ...btnStyle, color: '#9b72ff' }).setOrigin(1, 0.5).setDepth(21).setInteractive({ useHandCursor: true });
+    // Buttons: Home, Reset, Rotate — properly sized and spaced
+    const btnStyle = { fontFamily: 'Fredoka', fontSize: btnFs + 'px', color: '#ffffff' };
+    const btnSpacing = btnFs * 2.2;
+    const home  = this.add.text(W - pad - btnFs * 0.5, btnY, '🏠', btnStyle)
+      .setOrigin(0.5).setDepth(21).setInteractive({ useHandCursor: true });
+    const reset = this.add.text(W - pad - btnFs * 0.5 - btnSpacing, btnY, '🔄', btnStyle)
+      .setOrigin(0.5).setDepth(21).setInteractive({ useHandCursor: true });
+
+    // Rotation arrows — side of screen, vertically centered
+    const rotL = this.add.text(pad, H / 2, '◀', { ...btnStyle, color: '#9b72ff' })
+      .setOrigin(0, 0.5).setDepth(21).setInteractive({ useHandCursor: true });
+    const rotR = this.add.text(W - pad, H / 2, '▶', { ...btnStyle, color: '#9b72ff' })
+      .setOrigin(1, 0.5).setDepth(21).setInteractive({ useHandCursor: true });
 
     home.on('pointerdown',  () => { audio.playTap(); this.goToWorldSelect(); });
     reset.on('pointerdown', () => { audio.playTap(); this.resetLevel(); });
@@ -1131,12 +1163,12 @@ export class GameScene extends Phaser.Scene {
     rotR.on('pointerdown',  () => { audio.playTap(); this.rotateView(1); });
   }
 
-  private drawHUDBar(W: number) {
+  private drawHUDBar(W: number, hudH = 50) {
     this.hudBar.clear();
     this.hudBar.fillStyle(0x0a001a, 0.85);
-    this.hudBar.fillRect(0, 0, W, 50);
+    this.hudBar.fillRect(0, 0, W, hudH);
     this.hudBar.lineStyle(1, 0x9b72ff, 0.3);
-    this.hudBar.lineBetween(0, 50, W, 50);
+    this.hudBar.lineBetween(0, hudH, W, hudH);
   }
 
   private updateHUD() {
