@@ -122,6 +122,59 @@ class AudioManager {
     });
   }
 
+  playKeyCollect() {
+    this.play(ctx => {
+      [987, 1318, 1568].forEach((freq, i) => {
+        const o = ctx.createOscillator(); const g = ctx.createGain();
+        o.connect(g); g.connect(ctx.destination);
+        o.type = 'sine'; o.frequency.value = freq;
+        g.gain.setValueAtTime(0, ctx.currentTime + i * 0.05);
+        g.gain.linearRampToValueAtTime(0.18, ctx.currentTime + i * 0.05 + 0.015);
+        g.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + i * 0.05 + 0.22);
+        o.start(ctx.currentTime + i * 0.05);
+        o.stop(ctx.currentTime + i * 0.05 + 0.23);
+      });
+    });
+  }
+
+  playCrownEquip() {
+    this.play(ctx => {
+      const scale = [523.25, 659.25, 783.99, 1046.50, 1318.51, 1567.98];
+      scale.forEach((freq, i) => {
+        const o = ctx.createOscillator(); const g = ctx.createGain();
+        o.connect(g); g.connect(ctx.destination);
+        o.type = 'triangle'; o.frequency.value = freq;
+        g.gain.setValueAtTime(0, ctx.currentTime + i * 0.045);
+        g.gain.linearRampToValueAtTime(0.12, ctx.currentTime + i * 0.045 + 0.01);
+        g.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + i * 0.045 + 0.15);
+        o.start(ctx.currentTime + i * 0.045);
+        o.stop(ctx.currentTime + i * 0.045 + 0.16);
+      });
+    });
+  }
+
+  playRotator() {
+    this.play(ctx => {
+      [1, 1.5].forEach((mult, i) => {
+        const o = ctx.createOscillator(); const g = ctx.createGain();
+        o.connect(g); g.connect(ctx.destination);
+        o.type = 'sawtooth';
+        
+        const start = ctx.currentTime + i * 0.05;
+        o.frequency.setValueAtTime(250 * mult, start);
+        o.frequency.exponentialRampToValueAtTime(800 * mult, start + 0.18);
+        
+        g.gain.setValueAtTime(0.1, start);
+        g.gain.exponentialRampToValueAtTime(0.001, start + 0.2);
+        
+        const f = ctx.createBiquadFilter(); f.type = 'lowpass'; f.frequency.value = 1500;
+        o.disconnect(g); o.connect(f); f.connect(g);
+        
+        o.start(start); o.stop(start + 0.21);
+      });
+    });
+  }
+
   playVictory() {
     this.play(ctx => {
       const notes = [523, 659, 784, 1047, 1319, 1568];

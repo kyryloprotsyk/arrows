@@ -248,7 +248,7 @@ export class ShopScene extends Phaser.Scene {
     }).setOrigin(0.5).setDepth(31).setAlpha(0);
 
     // Animate reveal
-    audio.playCapsuleOpen();
+    audio.playCrownEquip();
     this.tweens.add({ targets: emojiTxt, alpha: 1, scaleX: 1, scaleY: 1, duration: 500, ease: 'Back.Out', delay: 100 });
     this.tweens.add({ targets: [nameTxt, rarityTxt, closeTxt], alpha: 1, duration: 400, delay: 500 });
 
@@ -329,7 +329,7 @@ export class ShopScene extends Phaser.Scene {
       g.on('pointerover', () => draw(true, this.activeSkin === skin.id));
       g.on('pointerout',  () => draw(false, this.activeSkin === skin.id));
       g.on('pointerdown', () => {
-        audio.playTap();
+        audio.playCrownEquip();
         GameData.activeSkin.set(skin.id);
         this.activeSkin = skin.id;
         this.refreshWardrobeGrid();

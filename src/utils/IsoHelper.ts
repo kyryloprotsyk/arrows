@@ -62,24 +62,37 @@ function pointInPoly(px: number, py: number, poly: number[]): boolean {
 }
 
 
+export type CoordTransformer = (x: number, y: number) => { x: number; y: number };
+
 /** Draw a full isometric cube at (cx, cy) using Phaser Graphics API. */
 export function drawIsoCube(
   g: Phaser.GameObjects.Graphics,
   cx: number, cy: number,
   topCol: number, leftCol: number, rightCol: number,
   glowCol: number,
-  glowAlpha = 0.5
+  glowAlpha = 0.5,
+  transformer?: CoordTransformer
 ) {
   const tw = TILE_W, th = TILE_H, bh = BLOCK_H;
 
   // Shared vertex coordinates
-  const topX = cx,      topY = cy - th;
-  const leftX = cx - tw, leftY = cy;
-  const rightX = cx + tw, rightY = cy;
-  const botX = cx,      botY = cy + th;
-  const lbX = cx - tw,  lbY = cy + bh;
-  const rbX = cx + tw,  rbY = cy + bh;
-  const bbX = cx,       bbY = cy + th + bh;
+  let topX = cx,      topY = cy - th;
+  let leftX = cx - tw, leftY = cy;
+  let rightX = cx + tw, rightY = cy;
+  let botX = cx,      botY = cy + th;
+  let lbX = cx - tw,  lbY = cy + bh;
+  let rbX = cx + tw,  rbY = cy + bh;
+  let bbX = cx,       bbY = cy + th + bh;
+
+  if (transformer) {
+    const tTop = transformer(topX, topY);     topX = tTop.x; topY = tTop.y;
+    const tLeft = transformer(leftX, leftY);   leftX = tLeft.x; leftY = tLeft.y;
+    const tRight = transformer(rightX, rightY); rightX = tRight.x; rightY = tRight.y;
+    const tBot = transformer(botX, botY);     botX = tBot.x; botY = tBot.y;
+    const tLb = transformer(lbX, lbY);       lbX = tLb.x; lbY = tLb.y;
+    const tRb = transformer(rbX, rbY);       rbX = tRb.x; rbY = tRb.y;
+    const tBb = transformer(bbX, bbY);       bbX = tBb.x; bbY = tBb.y;
+  }
 
   // Helper: fill a polygon by coords [x0,y0, x1,y1, ...]
   const fillPoly = (coords: number[]) => {
@@ -164,124 +177,243 @@ export function getBlockPalette(worldIndex: number, posHash: number) {
   const WORLD_HUES: Record<number, number[]> = {
     1: [320, 335, 350, 15],  // Jelly Hills: Rich magentas, deep pinks, neon coral
     2: [140, 160, 175, 190], // Dino Valley: Vivid teals, toxic greens, cyan
-    3: [240, 260, 275, 290]  // Cosmo Station: Deep indigo, cyberpunk purple, electric violet
+    3: [240, 260, 275, 290], // Cosmo Station: Deep indigo, cyberpunk purple, electric violet
+    4: [165, 175, 185, 195], // Coral Reef: Aqua, ocean blue, teal
+    5: [185, 195, 205, 215], // Ice Castle: Ice blue, frost white
+    6: [5, 15, 25, 345]      // Volcanic Land: Lava orange, magma red, ash purple
   };
   const hues = WORLD_HUES[worldIndex] ?? WORLD_HUES[1];
   const h = hues[((posHash % hues.length) + hues.length) % hues.length];
 
   return {
-    top:   hslToInt(h, 95, 72),
-    left:  hslToInt(h, 88, 52),
-    right: hslToInt(h, 90, 35),
-    glow:  hslToInt(h, 100, 85)
+    top:   hslToInt(h, 100, 75),
+    left:  hslToInt(h, 100, 56),
+    right: hslToInt(h, 95, 40),
+    glow:  hslToInt(h, 100, 88)
   };
 }
 
 /** Draws a 3D isometric hat on top of a block */
-export function drawHat(g: Phaser.GameObjects.Graphics, cx: number, cy: number, tw: number, th: number, skin: string, timeNow: number) {
+export function drawHat(
+  g: Phaser.GameObjects.Graphics,
+  cx: number, cy: number,
+  tw: number, th: number,
+  skin: string,
+  timeNow: number,
+  transformer?: CoordTransformer
+) {
   if (skin === 'none') return;
   const hx = cx, hy = cy - th;
 
+  const tPt = (x: number, y: number) => transformer ? transformer(x, y) : { x, y };
+
   switch (skin) {
-    case 'wizard':
+    case 'wizard': {
+      const c = tPt(hx, hy);
+      const tip = tPt(hx, hy - 28);
       g.fillStyle(0x4b0082, 1);
-      g.fillEllipse(hx, hy, tw * 0.7, th * 0.7);
+      g.fillEllipse(c.x, c.y, tw * 0.7, th * 0.7);
       g.beginPath();
-      g.moveTo(hx - tw * 0.35, hy);
-      g.lineTo(hx, hy - 28);
-      g.lineTo(hx + tw * 0.35, hy);
+      const baseL = tPt(hx - tw * 0.35, hy);
+      const baseR = tPt(hx + tw * 0.35, hy);
+      g.moveTo(baseL.x, baseL.y);
+      g.lineTo(tip.x, tip.y);
+      g.lineTo(baseR.x, baseR.y);
       g.closePath();
       g.fillPath();
       g.fillStyle(0xffd700, 1);
-      g.fillEllipse(hx, hy - 2, tw * 0.38, th * 0.38);
+      g.fillEllipse(c.x, c.y - 2, tw * 0.38, th * 0.38);
       g.fillStyle(0xffffff, 0.95);
-      g.fillCircle(hx, hy - 28, 3.5);
+      g.fillCircle(tip.x, tip.y, 3.5);
       break;
+    }
 
-    case 'crown':
+    case 'crown': {
+      const c = tPt(hx, hy);
       g.fillStyle(0xffd700, 1);
-      g.fillEllipse(hx, hy, tw * 0.52, th * 0.52);
+      g.fillEllipse(c.x, c.y, tw * 0.52, th * 0.52);
+
+      const p0 = tPt(hx - tw * 0.26, hy);
+      const p1 = tPt(hx - tw * 0.26, hy - 13);
+      const p2 = tPt(hx - tw * 0.13, hy - 4);
+      const p3 = tPt(hx, hy - 17);
+      const p4 = tPt(hx + tw * 0.13, hy - 4);
+      const p5 = tPt(hx + tw * 0.26, hy - 13);
+      const p6 = tPt(hx + tw * 0.26, hy);
+
       g.beginPath();
-      g.moveTo(hx - tw * 0.26, hy);
-      g.lineTo(hx - tw * 0.26, hy - 13);
-      g.lineTo(hx - tw * 0.13, hy - 4);
-      g.lineTo(hx, hy - 17);
-      g.lineTo(hx + tw * 0.13, hy - 4);
-      g.lineTo(hx + tw * 0.26, hy - 13);
-      g.lineTo(hx + tw * 0.26, hy);
+      g.moveTo(p0.x, p0.y);
+      g.lineTo(p1.x, p1.y);
+      g.lineTo(p2.x, p2.y);
+      g.lineTo(p3.x, p3.y);
+      g.lineTo(p4.x, p4.y);
+      g.lineTo(p5.x, p5.y);
+      g.lineTo(p6.x, p6.y);
       g.closePath();
       g.fillPath();
+
       g.fillStyle(0xff2233, 1);
-      g.fillCircle(hx - tw * 0.26, hy - 13, 2.5);
-      g.fillCircle(hx, hy - 17, 2.5);
-      g.fillCircle(hx + tw * 0.26, hy - 13, 2.5);
+      g.fillCircle(p1.x, p1.y, 2.5);
+      g.fillCircle(p3.x, p3.y, 2.5);
+      g.fillCircle(p5.x, p5.y, 2.5);
       break;
+    }
 
-    case 'cat':
+    case 'cat': {
+      const el1 = tPt(hx - tw * 0.42, hy - 3);
+      const el2 = tPt(hx - tw * 0.14, hy);
+      const el3 = tPt(hx - tw * 0.36, hy - 14);
+
+      const il1 = tPt(hx - tw * 0.37, hy - 3);
+      const il2 = tPt(hx - tw * 0.19, hy - 1);
+      const il3 = tPt(hx - tw * 0.33, hy - 11);
+
+      const er1 = tPt(hx + tw * 0.42, hy - 3);
+      const er2 = tPt(hx + tw * 0.14, hy);
+      const er3 = tPt(hx + tw * 0.36, hy - 14);
+
+      const ir1 = tPt(hx + tw * 0.37, hy - 3);
+      const ir2 = tPt(hx + tw * 0.19, hy - 1);
+      const ir3 = tPt(hx + tw * 0.33, hy - 11);
+
       g.fillStyle(0x2b2b2b, 1);
-      g.fillTriangle(hx - tw * 0.42, hy - 3, hx - tw * 0.14, hy, hx - tw * 0.36, hy - 14);
+      g.fillTriangle(el1.x, el1.y, el2.x, el2.y, el3.x, el3.y);
       g.fillStyle(0xffaacc, 1);
-      g.fillTriangle(hx - tw * 0.37, hy - 3, hx - tw * 0.19, hy - 1, hx - tw * 0.33, hy - 11);
+      g.fillTriangle(il1.x, il1.y, il2.x, il2.y, il3.x, il3.y);
       g.fillStyle(0x2b2b2b, 1);
-      g.fillTriangle(hx + tw * 0.42, hy - 3, hx + tw * 0.14, hy, hx + tw * 0.36, hy - 14);
+      g.fillTriangle(er1.x, er1.y, er2.x, er2.y, er3.x, er3.y);
       g.fillStyle(0xffaacc, 1);
-      g.fillTriangle(hx + tw * 0.37, hy - 3, hx + tw * 0.19, hy - 1, hx + tw * 0.33, hy - 11);
+      g.fillTriangle(ir1.x, ir1.y, ir2.x, ir2.y, ir3.x, ir3.y);
       break;
+    }
 
-    case 'tophat':
+    case 'tophat': {
+      const c1 = tPt(hx, hy);
+      const c2 = tPt(hx, hy - 22);
       g.fillStyle(0x111111, 1);
-      g.fillEllipse(hx, hy, tw * 0.72, th * 0.72);
+      g.fillEllipse(c1.x, c1.y, tw * 0.72, th * 0.72);
       g.fillStyle(0x222222, 1);
-      g.fillRect(hx - tw * 0.34, hy - 22, tw * 0.68, 22);
-      g.fillStyle(0xff1122, 1);
-      g.fillRect(hx - tw * 0.34, hy - 6, tw * 0.68, 5);
-      g.fillStyle(0x3a3a3a, 1);
-      g.fillEllipse(hx, hy - 22, tw * 0.34, th * 0.34);
-      break;
 
-    case 'chef':
-      g.fillStyle(0xdddddd, 1);
-      g.fillRect(hx - tw * 0.28, hy - 8, tw * 0.56, 8);
-      g.fillStyle(0xffffff, 1);
-      g.fillCircle(hx, hy - 18, 13);
-      g.fillCircle(hx - 8, hy - 13, 10);
-      g.fillCircle(hx + 8, hy - 13, 10);
-      break;
-
-    case 'propeller':
-      g.fillStyle(0xff3b30, 1);
-      g.fillEllipse(hx, hy, tw * 0.48, th * 0.48);
+      // Draw body as path
+      const bl = tPt(hx - tw * 0.34, hy);
+      const br = tPt(hx + tw * 0.34, hy);
+      const tl = tPt(hx - tw * 0.34, hy - 22);
+      const tr = tPt(hx + tw * 0.34, hy - 22);
       g.beginPath();
-      g.arc(hx, hy, tw * 0.24, Math.PI, 0, false);
+      g.moveTo(bl.x, bl.y);
+      g.lineTo(tl.x, tl.y);
+      g.lineTo(tr.x, tr.y);
+      g.lineTo(br.x, br.y);
       g.closePath();
       g.fillPath();
+
+      // Red band as path
+      const bandBl = tPt(hx - tw * 0.34, hy);
+      const bandBr = tPt(hx + tw * 0.34, hy);
+      const bandTl = tPt(hx - tw * 0.34, hy - 6);
+      const bandTr = tPt(hx + tw * 0.34, hy - 6);
+      g.fillStyle(0xff1122, 1);
+      g.beginPath();
+      g.moveTo(bandBl.x, bandBl.y);
+      g.lineTo(bandTl.x, bandTl.y);
+      g.lineTo(bandTr.x, bandTr.y);
+      g.lineTo(bandBr.x, bandBr.y);
+      g.closePath();
+      g.fillPath();
+
+      g.fillStyle(0x3a3a3a, 1);
+      g.fillEllipse(c2.x, c2.y, tw * 0.34, th * 0.34);
+      break;
+    }
+
+    case 'chef': {
+      // Base bands as path
+      const bl = tPt(hx - tw * 0.28, hy);
+      const br = tPt(hx + tw * 0.28, hy);
+      const tl = tPt(hx - tw * 0.28, hy - 8);
+      const tr = tPt(hx + tw * 0.28, hy - 8);
+      g.fillStyle(0xdddddd, 1);
+      g.beginPath();
+      g.moveTo(bl.x, bl.y);
+      g.lineTo(tl.x, tl.y);
+      g.lineTo(tr.x, tr.y);
+      g.lineTo(br.x, br.y);
+      g.closePath();
+      g.fillPath();
+
+      const cc = tPt(hx, hy - 18);
+      const cl = tPt(hx - 8, hy - 13);
+      const cr = tPt(hx + 8, hy - 13);
+      g.fillStyle(0xffffff, 1);
+      g.fillCircle(cc.x, cc.y, 13);
+      g.fillCircle(cl.x, cl.y, 10);
+      g.fillCircle(cr.x, cr.y, 10);
+      break;
+    }
+
+    case 'propeller': {
+      const c = tPt(hx, hy);
+      g.fillStyle(0xff3b30, 1);
+      g.fillEllipse(c.x, c.y, tw * 0.48, th * 0.48);
+
+      g.beginPath();
+      const arcStart = tPt(hx - tw * 0.24, hy);
+      const arcEnd = tPt(hx + tw * 0.24, hy);
+      g.moveTo(arcStart.x, arcStart.y);
+      // Draw 5 points to approximate a quadratic curve
+      for (let i = 1; i <= 4; i++) {
+        const ratio = i / 4;
+        const px = hx - tw * 0.24 + ratio * tw * 0.48;
+        // height profile is a simple parabola
+        const hOffset = tw * 0.24 * 4 * ratio * (1 - ratio);
+        const py = hy - hOffset;
+        const pt = tPt(px, py);
+        g.lineTo(pt.x, pt.y);
+      }
+      g.lineTo(arcEnd.x, arcEnd.y);
+      g.closePath();
+      g.fillPath();
+
+      const shaftB = tPt(hx, hy - 7);
+      const shaftT = tPt(hx, hy - 21);
       g.lineStyle(2, 0x777777, 1);
       g.beginPath();
-      g.moveTo(hx, hy - 7);
-      g.lineTo(hx, hy - 21);
+      g.moveTo(shaftB.x, shaftB.y);
+      g.lineTo(shaftT.x, shaftT.y);
       g.strokePath();
+
       const angle = (timeNow * 0.015) % (Math.PI * 2);
       const bx1 = hx + Math.cos(angle) * 15;
       const by1 = hy - 21 + Math.sin(angle) * 4;
       const bx2 = hx - Math.cos(angle) * 15;
       const by2 = hy - 21 - Math.sin(angle) * 4;
+
+      const p1 = tPt(bx1, by1);
+      const p2 = tPt(bx2, by2);
+
       g.lineStyle(2.5, 0xffcc00, 1);
       g.beginPath();
-      g.moveTo(bx1, by1);
-      g.lineTo(bx2, by2);
+      g.moveTo(p1.x, p1.y);
+      g.lineTo(p2.x, p2.y);
       g.strokePath();
-      g.fillStyle(0x333333, 1);
-      g.fillCircle(hx, hy - 21, 2.5);
-      break;
 
-    case 'rainbow':
+      g.fillStyle(0x333333, 1);
+      g.fillCircle(shaftT.x, shaftT.y, 2.5);
+      break;
+    }
+
+    case 'rainbow': {
+      const c = tPt(hx, hy - 12);
+      const c2 = tPt(hx, hy - 16);
       const hVal = (timeNow * 0.1) % 360;
       const col1 = hslToInt(hVal, 100, 75);
       const col2 = hslToInt((hVal + 180) % 360, 100, 75);
+
       g.lineStyle(3, col1, 0.8);
-      g.strokeEllipse(hx, hy - 12, tw * 0.44, th * 0.44);
+      g.strokeEllipse(c.x, c.y, tw * 0.44, th * 0.44);
       g.lineStyle(1.5, col2, 0.6);
-      g.strokeEllipse(hx, hy - 16, tw * 0.32, th * 0.32);
+      g.strokeEllipse(c2.x, c2.y, tw * 0.32, th * 0.32);
       break;
+    }
   }
 }

@@ -1,7 +1,7 @@
 /* levelGenerator.ts — Solvable 3D puzzle generator (no Three.js dependency) */
 
 export interface Vec3 { x: number; y: number; z: number; }
-export type BlockType = 'normal' | 'bomb' | 'key' | 'chest' | 'rainbow';
+export type BlockType = 'normal' | 'bomb' | 'key' | 'chest' | 'rainbow' | 'rotator';
 
 export interface BlockConfig {
   id: string;
@@ -38,7 +38,7 @@ const DIRS: Vec3[] = [
 class LevelGenerator {
 
   getWorldName(w: number) {
-    return ['', 'Jelly Hills', 'Dino Valley', 'Cosmo Station'][w] ?? 'Jelly Hills';
+    return ['', 'Jelly Hills', 'Dino Valley', 'Cosmo Station', 'Coral Reef', 'Ice Castle', 'Volcanic Land'][w] ?? 'Jelly Hills';
   }
 
   generateLevel(worldIndex: number, levelIndex: number): LevelData {
@@ -122,7 +122,7 @@ class LevelGenerator {
         }
       }
 
-    } else {
+    } else if (w === 3) {
       // World 3: High complexity & massive size
       if (l === 1) {
         // Giant Star
@@ -164,6 +164,165 @@ class LevelGenerator {
         [-5, -4, -3, 3, 4, 5].forEach(x => coords.push(v3(x, 0, 0)));
         [-4, -3, 3, 4].forEach(y => coords.push(v3(0, y, 0)));
         [-4, -3, 3, 4].forEach(z => coords.push(v3(0, 0, z)));
+      }
+
+    } else if (w === 4) {
+      // World 4: Coral Reef (Helix Vortex, whirlpools, interlocking chains)
+      if (l === 1) {
+        // Helix Vortex
+        for (let i = 0; i < 18; i++) {
+          const a = (i / 9) * Math.PI * 2;
+          coords.push(v3(Math.round(Math.cos(a) * 2), Math.floor(i / 9), Math.round(Math.sin(a) * 2)));
+          coords.push(v3(Math.round(Math.cos(a + Math.PI) * 1.5), Math.floor(i / 9) - 1, Math.round(Math.sin(a + Math.PI) * 1.5)));
+        }
+      } else if (l === 2) {
+        // Whirlpool
+        for (let y = -2; y <= 2; y++) coords.push(v3(0, y, 0));
+        for (let i = 0; i < 8; i++) {
+          const a = (i / 8) * Math.PI * 2;
+          coords.push(v3(Math.round(Math.cos(a) * 2), -1, Math.round(Math.sin(a) * 2)));
+        }
+        for (let i = 0; i < 12; i++) {
+          const a = (i / 12) * Math.PI * 2;
+          coords.push(v3(Math.round(Math.cos(a) * 3), 1, Math.round(Math.sin(a) * 3)));
+        }
+      } else if (l === 3) {
+        // Anchor
+        for (let x = -3; x <= 3; x++) coords.push(v3(x, 1, 0));
+        for (let y = -3; y <= 2; y++) coords.push(v3(0, y, 0));
+        for (let x = -2; x <= 2; x += 4) {
+          coords.push(v3(x, -2, 0));
+          coords.push(v3(x, -1, Math.sign(x)));
+        }
+      } else if (l === 4) {
+        // Double Ring
+        for (let i = 0; i < 12; i++) {
+          const a = (i / 12) * Math.PI * 2;
+          coords.push(v3(Math.round(Math.cos(a) * 2.5) - 1, 0, Math.round(Math.sin(a) * 2.5)));
+        }
+        for (let i = 0; i < 12; i++) {
+          const a = (i / 12) * Math.PI * 2;
+          coords.push(v3(1, Math.round(Math.cos(a) * 2.5), Math.round(Math.sin(a) * 2.5)));
+        }
+      } else {
+        // Reef Wall
+        for (let x = -2; x <= 2; x++) {
+          for (let y = -1; y <= 1; y++) {
+            for (let z = -1; z <= 1; z++) {
+              if (Math.abs(x) === 2 || Math.abs(z) === 1) {
+                coords.push(v3(x, y, z));
+              }
+            }
+          }
+        }
+      }
+
+    } else if (w === 5) {
+      // World 5: Ice Castle (Chilled spires, castles & double keys)
+      if (l === 1) {
+        // Castle Gates
+        for (let y = -2; y <= 2; y++) {
+          coords.push(v3(-2, y, 0));
+          coords.push(v3(2, y, 0));
+        }
+        coords.push(v3(0, 0, 0));
+        coords.push(v3(0, -1, 0));
+        coords.push(v3(0, 1, 0));
+        coords.push(v3(0, 0, 1));
+        coords.push(v3(0, 0, -1));
+      } else if (l === 2) {
+        // Throne Room U-shape
+        for (let x = -2; x <= 2; x++) {
+          for (let z = -2; z <= 2; z++) {
+            if (z === -2 || x === -2 || x === 2) {
+              for (let y = -1; y <= 1; y++) coords.push(v3(x, y, z));
+            }
+          }
+        }
+        coords.push(v3(0, 0, 0));
+        coords.push(v3(0, 0, 1));
+      } else if (l === 3) {
+        // Frost Spire
+        for (let y = -3; y <= 3; y++) {
+          const wd = y === 3 ? 0 : Math.abs(y) === 2 ? 1 : 2;
+          for (let x = -wd; x <= wd; x++) {
+            for (let z = -wd; z <= wd; z++) {
+              if (Math.abs(x) === wd || Math.abs(z) === wd) coords.push(v3(x, y, z));
+            }
+          }
+        }
+      } else if (l === 4) {
+        // Crystal Crown
+        for (const d of DIRS) {
+          coords.push(v3scale(d, 2));
+          coords.push(v3scale(d, 3));
+        }
+        for (let x = -1; x <= 1; x += 2) {
+          for (let z = -1; z <= 1; z += 2) {
+            for (let y = -1; y <= 1; y++) coords.push(v3(x, y, z));
+          }
+        }
+      } else {
+        // Glacier Maze
+        for (let x = -1.5; x <= 1.5; x++) {
+          for (let y = -1.5; y <= 1.5; y++) {
+            for (let z = -1.5; z <= 1.5; z++) {
+              const rx = Math.round(x * 2);
+              const ry = Math.round(y * 2);
+              const rz = Math.round(z * 2);
+              if (Math.abs(rx) === 3 || Math.abs(ry) === 3 || Math.abs(rz) === 3) {
+                if (Math.abs(rx) + Math.abs(ry) + Math.abs(rz) >= 5) coords.push(v3(rx, ry, rz));
+              }
+            }
+          }
+        }
+        coords.push(v3(0, 0, 0));
+      }
+
+    } else {
+      // World 6: Volcanic Land (Magma core, lava pit, extreme structures)
+      if (l === 1) {
+        // Lava Pit
+        for (let i = 0; i < 16; i++) {
+          const a = (i / 16) * Math.PI * 2;
+          coords.push(v3(Math.round(Math.cos(a) * 3), 0, Math.round(Math.sin(a) * 3)));
+          coords.push(v3(Math.round(Math.cos(a) * 3), 1, Math.round(Math.sin(a) * 3)));
+        }
+        coords.push(v3(0, 0, 0));
+        coords.push(v3(0, 1, 0));
+      } else if (l === 2) {
+        // Crossbones
+        for (let i = -3; i <= 3; i++) {
+          coords.push(v3(i, i, 0));
+          coords.push(v3(-i, i, 0));
+          coords.push(v3(0, i, i));
+          coords.push(v3(0, i, -i));
+        }
+      } else if (l === 3) {
+        // Volcano Cone
+        for (let x = -2; x <= 2; x++) for (let z = -2; z <= 2; z++) coords.push(v3(x, -1, z));
+        for (let x = -1; x <= 1; x++) for (let z = -1; z <= 1; z++) coords.push(v3(x, 0, z));
+        coords.push(v3(0, 1, 0));
+        coords.push(v3(0, 2, 0));
+      } else if (l === 4) {
+        // Firewall
+        for (let x = -2; x <= 2; x++) {
+          for (let y = -1; y <= 1; y++) {
+            coords.push(v3(x, y, -1.5));
+            coords.push(v3(x, y, 0));
+            coords.push(v3(x, y, 1.5));
+          }
+        }
+      } else {
+        // Magma Core (complex interlocking shell)
+        for (let x = -2; x <= 2; x++) {
+          for (let y = -2; y <= 2; y++) {
+            for (let z = -2; z <= 2; z++) {
+              const dist = Math.abs(x) + Math.abs(y) + Math.abs(z);
+              if (dist === 2 || dist === 3 || dist === 0) coords.push(v3(x, y, z));
+            }
+          }
+        }
       }
     }
 
@@ -250,11 +409,20 @@ class LevelGenerator {
         keyBlock.type = 'key';
         keyBlock.targetChestId = chestBlock.id;
       }
+
+      // Rotator blocks (from level 2+)
+      if (l >= 2) {
+        const rotCount = l < 4 ? 1 : 2;
+        for (let i = 0; i < rotCount && si < shuffle.length; i++, si++) {
+          shuffle[si].type = 'rotator';
+        }
+      }
     }
 
-    if (w === 3) {
-      // Rainbow buddies (~15%)
-      const count = Math.max(1, Math.round(normal.length * 0.15));
+    if (w >= 3) {
+      // Rainbow buddies (~15% for W3-4, 20% for W5-6)
+      const pct = w >= 5 ? 0.20 : 0.15;
+      const count = Math.max(1, Math.round(normal.length * pct));
       for (let i = 0; i < count && si < shuffle.length; i++, si++) {
         if (shuffle[si].type === 'normal') shuffle[si].type = 'rainbow';
       }

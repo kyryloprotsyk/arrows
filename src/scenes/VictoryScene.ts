@@ -228,31 +228,53 @@ export class VictoryScene extends Phaser.Scene {
   private createBtn(
     x: number, y: number, w: number, h: number,
     fill: number, glow: number, label: string, delay: number
-  ): Phaser.GameObjects.Graphics {
-    const g = this.add.graphics().setAlpha(0).setDepth(10);
-    g.setInteractive(new Phaser.Geom.Rectangle(x - w / 2, y - h / 2, w, h), Phaser.Geom.Rectangle.Contains);
+  ): Phaser.GameObjects.Container {
+    const container = this.add.container(x, y).setAlpha(0).setDepth(10);
 
+    const g = this.add.graphics();
     const draw = (hover: boolean) => {
       g.clear();
       g.fillStyle(glow, 0.2);
-      g.fillRoundedRect(x - w / 2 + 2, y - h / 2 + 6, w, h, h / 2);
+      g.fillRoundedRect(-w / 2 + 2, -h / 2 + 6, w, h, h / 2);
       g.fillStyle(hover ? fill : Phaser.Display.Color.ValueToColor(fill).darken(15).color, 1);
-      g.fillRoundedRect(x - w / 2, y - h / 2, w, h, h / 2);
+      g.fillRoundedRect(-w / 2, -h / 2, w, h, h / 2);
       for (let p = 0; p < 3; p++) {
         g.lineStyle([4, 2.5, 1.5][p], glow, [0.12, 0.3, 0.7][p]);
-        g.strokeRoundedRect(x - w / 2, y - h / 2, w, h, h / 2);
+        g.strokeRoundedRect(-w / 2, -h / 2, w, h, h / 2);
       }
     };
     draw(false);
 
-    const txt = this.add.text(x, y, label, {
+    const txt = this.add.text(0, 0, label, {
       fontFamily: 'Fredoka', fontSize: '20px', color: '#ffffff'
-    }).setOrigin(0.5).setAlpha(0).setDepth(11);
+    }).setOrigin(0.5);
 
-    g.on('pointerover', () => { draw(true); g.setScale(1.04); });
-    g.on('pointerout',  () => { draw(false); g.setScale(1); });
+    container.add([g, txt]);
 
-    this.tweens.add({ targets: [g, txt], alpha: 1, duration: 500, delay: 1200 + delay });
-    return g;
+    container.setSize(w, h).setInteractive(new Phaser.Geom.Rectangle(-w / 2, -h / 2, w, h), Phaser.Geom.Rectangle.Contains);
+
+    container.on('pointerover', () => {
+      draw(true);
+      this.tweens.add({
+        targets: container,
+        scale: 1.05,
+        duration: 150,
+        ease: 'Quad.easeOut',
+        overwrite: true
+      });
+    });
+    container.on('pointerout',  () => {
+      draw(false);
+      this.tweens.add({
+        targets: container,
+        scale: 1.0,
+        duration: 150,
+        ease: 'Quad.easeOut',
+        overwrite: true
+      });
+    });
+
+    this.tweens.add({ targets: container, alpha: 1, duration: 500, delay: 1200 + delay });
+    return container;
   }
 }

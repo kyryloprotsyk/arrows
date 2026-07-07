@@ -16,7 +16,7 @@ interface BuddyBlock extends BlockConfig {
   // Target screen position
   tsx: number; tsy: number;
   // Animation state
-  state: 'idle' | 'bump' | 'escaping' | 'locked';
+  state: 'idle' | 'bump' | 'escaping' | 'locked' | 'anticipation' | 'wiggle';
   animT: number;          // seconds in current state
   escapeVx: number; escapeVy: number;
   bumpDx: number; bumpDy: number;
@@ -29,6 +29,14 @@ interface BuddyBlock extends BlockConfig {
   palTop: number; palLeft: number; palRight: number; palGlow: number;
   // Draw depth
   depth: number;
+  // Jelly squash & stretch
+  jellyScalePara: number;
+  jellyScalePerp: number;
+  jellyAngle: number;
+  jellyDirX: number;
+  jellyDirY: number;
+  rotateAnimT?: number;
+  escapeGridDir?: { x: number, y: number, z: number };
 }
 
 export class GameScene extends Phaser.Scene {
@@ -158,7 +166,12 @@ export class GameScene extends Phaser.Scene {
         rainbowHue: Math.random(),
         palTop: pal.top, palLeft: pal.left,
         palRight: pal.right, palGlow: pal.glow,
-        depth: getDrawDepth(gx, gy, gz, this.rotState)
+        depth: getDrawDepth(gx, gy, gz, this.rotState),
+        jellyScalePara: 1,
+        jellyScalePerp: 1,
+        jellyAngle: 0,
+        jellyDirX: 0,
+        jellyDirY: 0
       } as BuddyBlock;
     });
 
@@ -198,9 +211,16 @@ export class GameScene extends Phaser.Scene {
     const t: Record<string, ReturnType<typeof getBlockPalette>> = {
       bomb: { top: 0x2a2a3a, left: 0x1a1a25, right: 0x0f0f18, glow: 0xff3c00 },
       key:  { top: 0xffcc00, left: 0xe6a800, right: 0xb38200, glow: 0xffee55 },
-      chest:{ top: 0x8b5e3c, left: 0x6b4020, right: 0x4a2a12, glow: 0xffcc00 }
+      chest:{ top: 0x8b5e3c, left: 0x6b4020, right: 0x4a2a12, glow: 0xffcc00 },
+      rotator:{ top: 0x00f0ff, left: 0x00a2cc, right: 0x006180, glow: 0x66f5ff }
     };
     return t[type] ?? { top: 0x888888, left: 0x555555, right: 0x333333, glow: 0xaaaaaa };
+  }
+
+  private triggerHaptic(pattern: number | number[]) {
+    if (typeof navigator !== 'undefined' && navigator.vibrate) {
+      try { navigator.vibrate(pattern); } catch { /* ignore */ }
+    }
   }
 
   // ═══════════════════════════════════════════════════════════════════════
@@ -227,7 +247,7 @@ export class GameScene extends Phaser.Scene {
       const dx = p.x - this.dragStartX;
       const dy = p.y - this.dragStartY;
       this.totalDragX += p.velocity.x;
-      if (Math.abs(dx) + Math.abs(dy) > 6) this.hasMoved = true;
+      if (Math.abs(dx) + Math.abs(dy) > 16) this.hasMoved = true;
 
       // Pan
       this.panTargetX = this.panAtDragX + dx / this.camZoom;
@@ -288,12 +308,32 @@ export class GameScene extends Phaser.Scene {
       .filter(b => b.state !== 'escaping')
       .sort((a, b2) => b2.depth - a.depth); // front first
 
+    // 1. Direct hit check
     for (const buddy of sorted) {
       if (isPointInBlock(wx, wy, buddy.sx, buddy.sy)) {
+        this.triggerHaptic(15);
         audio.playTap();
         this.attemptEscape(buddy);
         return;
       }
+    }
+
+    // 2. Fat-finger snap target selection (closest block center within 40px in screen space)
+    let closestBuddy: BuddyBlock | null = null;
+    let minDist = 40;
+    for (const buddy of sorted) {
+      const screenPos = this.getScreenPos(buddy);
+      const dist = Math.hypot(px - screenPos.x, py - screenPos.y);
+      if (dist < minDist) {
+        minDist = dist;
+        closestBuddy = buddy;
+      }
+    }
+
+    if (closestBuddy) {
+      this.triggerHaptic(15);
+      audio.playTap();
+      this.attemptEscape(closestBuddy);
     }
   }
 
@@ -336,6 +376,8 @@ export class GameScene extends Phaser.Scene {
       buddy.state = 'bump';
       buddy.animT = 0;
       buddy.bumpDx = 5; buddy.bumpDy = 0;
+      buddy.jellyDirX = 1; buddy.jellyDirY = 0; buddy.jellyAngle = 0;
+      this.triggerHaptic(30);
       return;
     }
     if (buddy.state !== 'idle') return;
@@ -359,9 +401,9 @@ export class GameScene extends Phaser.Scene {
       if (this.isBlocked(buddy, escDir)) { audio.playBump(); this.startBump(buddy); return; }
     }
 
-    // Launch!
+    // Launch with anticipation first!
     this.useMove();
-    this.startEscape(buddy, escDir);
+    this.startAnticipation(buddy, escDir);
 
     // Key unlocks chest
     if (buddy.type === 'key' && buddy.targetChestId) {
@@ -369,7 +411,8 @@ export class GameScene extends Phaser.Scene {
       if (chest) {
         this.time.delayedCall(200, () => {
           chest.state = 'idle';
-          audio.playCapsuleOpen();
+          audio.playKeyCollect();
+          this.triggerHaptic(25);
           this.spawnUnlockParticles(chest.sx, chest.sy);
         });
       }
@@ -411,6 +454,31 @@ export class GameScene extends Phaser.Scene {
     return dirs.find(d => !this.isBlocked(buddy, d)) ?? null;
   }
 
+  private startAnticipation(buddy: BuddyBlock, dir: BlockConfig['dir']) {
+    buddy.state = 'anticipation';
+    buddy.animT = 0;
+    buddy.escapeGridDir = { ...dir };
+
+    // Screen direction vector
+    const from = gridToScreen(buddy.x, buddy.y, buddy.z, this.rotState);
+    const to   = gridToScreen(buddy.x + dir.x, buddy.y + dir.y, buddy.z + dir.z, this.rotState);
+    const dx = to.x - from.x;
+    const dy = to.y - from.y;
+    const len = Math.hypot(dx, dy) || 1;
+
+    buddy.jellyDirX = dx / len;
+    buddy.jellyDirY = dy / len;
+    buddy.jellyAngle = Math.atan2(dy, dx);
+
+    // Compress in direction of motion (wind-up)
+    buddy.jellyScalePara = 0.70;
+    buddy.jellyScalePerp = 1.25;
+
+    // Small slide backwards
+    buddy.bumpDx = -dx * 0.12;
+    buddy.bumpDy = -dy * 0.12;
+  }
+
   private startEscape(buddy: BuddyBlock, dir: BlockConfig['dir']) {
     buddy.state = 'escaping';
     buddy.animT = 0;
@@ -421,6 +489,13 @@ export class GameScene extends Phaser.Scene {
     buddy.escapeVx = ((to.x - from.x) / len) * 16;
     buddy.escapeVy = ((to.y - from.y) / len) * 16;
 
+    // Motion stretch params
+    buddy.jellyDirX = (to.x - from.x) / len;
+    buddy.jellyDirY = (to.y - from.y) / len;
+    buddy.jellyAngle = Math.atan2(buddy.jellyDirY, buddy.jellyDirX);
+    buddy.jellyScalePara = 1.40;
+    buddy.jellyScalePerp = 0.70;
+
     this.spawnTrailParticles(buddy);
     audio.playLaunch();
   }
@@ -430,8 +505,45 @@ export class GameScene extends Phaser.Scene {
     buddy.animT = 0;
     const sc = gridToScreen(buddy.x + buddy.dir.x, buddy.y + buddy.dir.y, buddy.z + buddy.dir.z, this.rotState);
     const base = gridToScreen(buddy.x, buddy.y, buddy.z, this.rotState);
-    buddy.bumpDx = (sc.x - base.x) * 0.25;
-    buddy.bumpDy = (sc.y - base.y) * 0.25;
+    buddy.bumpDx = (sc.x - base.x) * 0.22;
+    buddy.bumpDy = (sc.y - base.y) * 0.22;
+
+    const dx = sc.x - base.x;
+    const dy = sc.y - base.y;
+    const len = Math.hypot(dx, dy) || 1;
+    buddy.jellyDirX = dx / len;
+    buddy.jellyDirY = dy / len;
+    buddy.jellyAngle = Math.atan2(dy, dx);
+
+    this.triggerHaptic(30);
+  }
+
+  private triggerRotatorEffect(rotator: BuddyBlock) {
+    this.triggerHaptic([35, 45, 35]);
+    audio.playRotator();
+    this.cameras.main.shake(120, 0.006);
+
+    const rotate90 = (dir: { x: number, y: number, z: number }): { x: number, y: number, z: number } => {
+      if (dir.y !== 0) {
+        return { x: dir.y, y: 0, z: 0 };
+      }
+      return { x: -dir.z, y: 0, z: dir.x };
+    };
+
+    this.buddies.forEach(b => {
+      if (b.id === rotator.id || b.state === 'escaping') return;
+      const dist = Math.hypot(b.x - rotator.x, b.y - rotator.y, b.z - rotator.z);
+      if (dist <= 1.25 && b.type !== 'chest') {
+        b.dir = rotate90(b.dir);
+        // Trigger a wiggle bounce in place
+        b.state = 'bump';
+        b.animT = 0;
+        b.bumpDx = 0; b.bumpDy = 0;
+        b.jellyDirX = 0; b.jellyDirY = 1;
+        b.jellyAngle = Math.PI / 2;
+        this.spawnUnlockParticles(b.sx, b.sy);
+      }
+    });
   }
 
   private useMove() {
@@ -449,6 +561,7 @@ export class GameScene extends Phaser.Scene {
   private explodeBomb(bomb: BuddyBlock) {
     this.cameras.main.shake(350, 0.022);
     this.cameras.main.flash(120, 255, 60, 0, false);
+    this.triggerHaptic([40, 60, 40]);
     audio.playExplosion();
     this.spawnBoomParticles(bomb.sx, bomb.sy);
     this.startEscape(bomb, bomb.dir);
@@ -497,17 +610,54 @@ export class GameScene extends Phaser.Scene {
         if (Math.hypot(b.sx - base.x, b.sy - base.y) > 1200) {
           escaped.push(b);
         }
-      } else if (b.state === 'bump') {
-        const dur = 0.32;
-        const t = Math.sin((b.animT / dur) * Math.PI);
+      } else if (b.state === 'anticipation') {
+        const dur = 0.15;
         const base = gridToScreen(b.x, b.y, b.z, this.rotState);
-        b.sx = base.x + b.bumpDx * t;
-        b.sy = base.y + b.bumpDy * t;
+        const ratio = Math.sin((b.animT / dur) * Math.PI);
+        b.sx = base.x + b.bumpDx * ratio;
+        b.sy = base.y + b.bumpDy * ratio;
+
+        if (b.animT >= dur) {
+          const escDir = b.escapeGridDir || b.dir;
+          this.startEscape(b, escDir);
+          if (b.type === 'rotator') {
+            this.triggerRotatorEffect(b);
+          }
+        }
+      } else if (b.state === 'bump') {
+        const dur = 0.60;
+        const base = gridToScreen(b.x, b.y, b.z, this.rotState);
+
+        // Displacement decaying oscillator
+        const dispRatio = Math.sin(b.animT * Math.PI * 5) * Math.exp(-b.animT * 5.0);
+        b.sx = base.x + b.bumpDx * dispRatio;
+        b.sy = base.y + b.bumpDy * dispRatio;
+
+        // Damped wiggle scale factors
+        const scaleAmp = Math.sin(b.animT * Math.PI * 5) * Math.exp(-b.animT * 5.0);
+        b.jellyScalePara = 1.0 - 0.40 * scaleAmp;
+        b.jellyScalePerp = 1.0 + 0.30 * scaleAmp;
+
         if (b.animT >= dur) {
           b.state = 'idle';
           b.sx = base.x; b.sy = base.y;
+          b.jellyScalePara = 1;
+          b.jellyScalePerp = 1;
         }
       } else if (b.state === 'idle') {
+        const breathSpeed = 0.0035;
+        const breathAmp = 0.022; // 2.2% scale variation
+        const phaseOffset = (b.x * 3.5 + b.y * 7.1 + b.z * 11.3) * 0.4;
+        const breath = Math.sin(this.time.now * breathSpeed + phaseOffset) * breathAmp;
+
+        b.jellyScalePara = 1.0 + breath;
+        b.jellyScalePerp = 1.0 - breath;
+        b.jellyAngle = Math.PI / 2; // breathe along vertical/horizontal alignment
+
+        const base = gridToScreen(b.x, b.y, b.z, this.rotState);
+        b.sx = base.x;
+        b.sy = base.y;
+
         // Blink logic
         b.blinkTimer -= dt;
         if (b.blinkTimer <= 0) {
@@ -515,6 +665,9 @@ export class GameScene extends Phaser.Scene {
           b.blinkTimer = 2 + Math.random() * 4;
           this.time.delayedCall(120, () => { b.isBlinking = false; });
         }
+      } else if (b.state === 'locked') {
+        b.jellyScalePara = 1;
+        b.jellyScalePerp = 1;
       }
     }
 
@@ -563,84 +716,168 @@ export class GameScene extends Phaser.Scene {
     const isLocked = (b.state === 'locked');
     const glowAlpha = isLocked ? 0.3 + Math.sin(this.time.now * 0.004) * 0.2 : 0.55;
 
-    drawIsoCube(g, cx, cy, top, left, right, glow, glowAlpha);
+    // Jelly transformation math
+    const scalePara = b.jellyScalePara;
+    const scalePerp = b.jellyScalePerp;
+    const angle = b.jellyAngle;
+    const cos = Math.cos(angle);
+    const sin = Math.sin(angle);
+
+    const transformer = (x: number, y: number) => {
+      const dx = x - cx;
+      const dy = y - (cy + 21); // vertical center of block (cy + BLOCK_H/2)
+      const rx = dx * cos + dy * sin;
+      const ry = -dx * sin + dy * cos;
+      const rxScaled = rx * scalePara;
+      const ryScaled = ry * scalePerp;
+      const dxPrime = rxScaled * cos - ryScaled * sin;
+      const dyPrime = rxScaled * sin + ryScaled * cos;
+      return { x: cx + dxPrime, y: (cy + 21) + dyPrime };
+    };
+
+    const tPt = (x: number, y: number) => transformer(x, y);
+
+    const fillTransformedRect = (x: number, y: number, w: number, h: number) => {
+      const p1 = tPt(x, y);
+      const p2 = tPt(x + w, y);
+      const p3 = tPt(x + w, y + h);
+      const p4 = tPt(x, y + h);
+      g.beginPath();
+      g.moveTo(p1.x, p1.y);
+      g.lineTo(p2.x, p2.y);
+      g.lineTo(p3.x, p3.y);
+      g.lineTo(p4.x, p4.y);
+      g.closePath();
+      g.fillPath();
+    };
+
+    const scaleX = scalePara * Math.abs(cos) + scalePerp * Math.abs(sin);
+    const scaleY = scalePara * Math.abs(sin) + scalePerp * Math.abs(cos);
+
+    drawIsoCube(g, cx, cy, top, left, right, glow, glowAlpha, transformer);
 
     // Type-specific overlays
     const tw = TILE_W, th = TILE_H;
 
     if (b.type === 'bomb') {
-      // Warning stripes on top face
       g.fillStyle(0xff3c00, 0.3);
-      g.fillRect(cx - tw * 0.4, cy + 2, tw * 0.8, 5);
-      g.fillRect(cx - tw * 0.4, cy + 10, tw * 0.8, 5);
-      // Fuse spark
+      fillTransformedRect(cx - tw * 0.4, cy + 2, tw * 0.8, 5);
+      fillTransformedRect(cx - tw * 0.4, cy + 10, tw * 0.8, 5);
+      
       const sparkBright = 0.6 + Math.sin(this.time.now * 0.02) * 0.4;
       g.fillStyle(0xffee00, sparkBright);
-      g.fillCircle(cx + 2, cy - th - 4, 4);
+      const sparkPos = tPt(cx + 2, cy - th - 4);
+      g.fillCircle(sparkPos.x, sparkPos.y, 4 * Math.min(scaleX, scaleY));
     }
 
     if (b.type === 'key') {
-      // Key cutout on top face
       g.fillStyle(0xffeebb, 0.8);
-      g.fillCircle(cx, cy, 6);
-      g.fillRect(cx, cy - 2, 12, 4);
-      g.fillRect(cx + 8, cy - 6, 4, 4);
+      const keyCircle = tPt(cx, cy);
+      g.fillCircle(keyCircle.x, keyCircle.y, 6 * Math.min(scaleX, scaleY));
+      fillTransformedRect(cx, cy - 2, 12, 4);
+      fillTransformedRect(cx + 8, cy - 6, 4, 4);
     }
 
     if (b.type === 'chest') {
-      // Gold band
       g.fillStyle(0xffcc00, 0.6);
-      g.fillRect(cx - tw + 2, cy - 4, tw * 2 - 4, 8);
-      // Lock symbol
+      fillTransformedRect(cx - tw + 2, cy - 4, tw * 2 - 4, 8);
+      
       g.fillStyle(0xffcc00, isLocked ? 0.9 : 0.4);
-      g.fillCircle(cx, cy + th * 0.5, 5);
-      g.fillRect(cx - 3, cy + th * 0.5 - 8, 6, 8);
+      const lockCircle = tPt(cx, cy + th * 0.5);
+      g.fillCircle(lockCircle.x, lockCircle.y, 5 * Math.min(scaleX, scaleY));
+      fillTransformedRect(cx - 3, cy + th * 0.5 - 8, 6, 8);
+    }
+
+    if (b.type === 'rotator') {
+      // Draw rotating circular arrows on the top face
+      g.lineStyle(2.5, 0x66f5ff, 0.95);
+      g.beginPath();
+      const steps = 16;
+      const rad = 10;
+      for (let i = 0; i <= steps; i++) {
+        const ang = (i / steps) * Math.PI * 1.5;
+        const px = cx + Math.cos(ang) * rad;
+        const py = cy - th * 0.5 + Math.sin(ang) * rad * 0.5;
+        const pt = tPt(px, py);
+        if (i === 0) g.moveTo(pt.x, pt.y);
+        else g.lineTo(pt.x, pt.y);
+      }
+      g.strokePath();
+
+      // Arrowhead
+      const angEnd = Math.PI * 1.5;
+      const pxEnd = cx + Math.cos(angEnd) * rad;
+      const pyEnd = cy - th * 0.5 + Math.sin(angEnd) * rad * 0.5;
+      const ptEnd = tPt(pxEnd, pyEnd);
+      const arrowheadTip = tPt(pxEnd - 4, pyEnd - 1);
+      const arrowheadSide = tPt(pxEnd, pyEnd - 5);
+      g.fillStyle(0x66f5ff, 0.95);
+      g.beginPath();
+      g.moveTo(ptEnd.x, ptEnd.y);
+      g.lineTo(arrowheadTip.x, arrowheadTip.y);
+      g.lineTo(arrowheadSide.x, arrowheadSide.y);
+      g.closePath();
+      g.fillPath();
     }
 
     // ─── FACE: Eyes ───────────────────────────────────────────────────
     if (b.type !== 'chest' || !isLocked) {
-      // Draw eyes on TOP face (projected positions)
       const eyeY = cy - 4;
       const eyeScaleY = b.isBlinking ? 0.15 : 1;
 
       // Left eye
       g.fillStyle(0x111111, 1);
-      g.fillEllipse(cx - 10, eyeY, 8, 7 * eyeScaleY);
+      const le = tPt(cx - 10, eyeY);
+      g.fillEllipse(le.x, le.y, 8 * scaleX, 7 * eyeScaleY * scaleY);
+      
       // Right eye
-      g.fillEllipse(cx + 10, eyeY, 8, 7 * eyeScaleY);
+      const re = tPt(cx + 10, eyeY);
+      g.fillEllipse(re.x, re.y, 8 * scaleX, 7 * eyeScaleY * scaleY);
 
       if (!b.isBlinking) {
         // Pupil highlights
         g.fillStyle(0xffffff, 0.8);
-        g.fillCircle(cx - 8, eyeY - 1, 2);
-        g.fillCircle(cx + 12, eyeY - 1, 2);
+        const lhl = tPt(cx - 8, eyeY - 1);
+        const rhl = tPt(cx + 12, eyeY - 1);
+        g.fillCircle(lhl.x, lhl.y, 2 * Math.min(scaleX, scaleY));
+        g.fillCircle(rhl.x, rhl.y, 2 * Math.min(scaleX, scaleY));
 
         // Blush cheeks
         g.fillStyle(0xff79a8, 0.4);
-        g.fillEllipse(cx - 16, eyeY + 4, 10, 5);
-        g.fillEllipse(cx + 16, eyeY + 4, 10, 5);
+        const lc = tPt(cx - 16, eyeY + 4);
+        const rc = tPt(cx + 16, eyeY + 4);
+        g.fillEllipse(lc.x, lc.y, 10 * scaleX, 5 * scaleY);
+        g.fillEllipse(rc.x, rc.y, 10 * scaleX, 5 * scaleY);
       }
 
-      // Smile / squish face on bump
       if (b.state === 'bump') {
-        // X eyes during bump
+        // X eyes
         g.fillStyle(0x111111, 1);
-        g.fillRect(cx - 13, eyeY - 1, 7, 2);
-        g.fillRect(cx - 10, eyeY - 4, 2, 7);
-        g.fillRect(cx + 7, eyeY - 1, 7, 2);
-        g.fillRect(cx + 10, eyeY - 4, 2, 7);
+        fillTransformedRect(cx - 13, eyeY - 1, 7, 2);
+        fillTransformedRect(cx - 10, eyeY - 4, 2, 7);
+        fillTransformedRect(cx + 7, eyeY - 1, 7, 2);
+        fillTransformedRect(cx + 10, eyeY - 4, 2, 7);
       } else {
-        // Tiny smile arc on top face
+        // Curved smile
+        const s1 = tPt(cx - 5, eyeY + 7);
+        const s1m = tPt(cx - 2.5, eyeY + 9.5);
+        const s2 = tPt(cx, eyeY + 10.5);
+        const s2m = tPt(cx + 2.5, eyeY + 9.5);
+        const s3 = tPt(cx + 5, eyeY + 7);
         g.lineStyle(2, 0x333333, 0.8);
         g.beginPath();
-        g.arc(cx, eyeY + 10, 6, 0, Math.PI, false);
+        g.moveTo(s1.x, s1.y);
+        g.lineTo(s1m.x, s1m.y);
+        g.lineTo(s2.x, s2.y);
+        g.lineTo(s2m.x, s2m.y);
+        g.lineTo(s3.x, s3.y);
         g.strokePath();
       }
     }
 
     // ─── HATS: Render equipped skin 3D hat on top of buddy ──────────────
     if (b.type !== 'chest') {
-      drawHat(g, cx, cy, tw, th, this.activeSkin, this.time.now);
+      drawHat(g, cx, cy, tw, th, this.activeSkin, this.time.now, transformer);
     }
 
     // ─── Arrow Direction Indicator ─────────────────────────────────────
@@ -771,6 +1008,7 @@ export class GameScene extends Phaser.Scene {
     const remaining = this.buddies.filter(b => b.state !== 'escaping');
     if (remaining.length > 0) return;
 
+    this.triggerHaptic([80, 50, 80, 50, 150]);
     audio.stopBGM();
     audio.playVictory();
     this.spawnVictoryConfetti();
