@@ -46,19 +46,15 @@ class LevelGenerator {
     const blocks = this.backSolve(coords);
     this.injectSpecials(blocks, worldIndex, levelIndex);
 
-    let moveLimit = blocks.length + 6;
-    if (worldIndex === 1) {
-      moveLimit = blocks.length + 5;
-    } else if (worldIndex === 2) {
-      moveLimit = blocks.length + 3;
-    } else if (worldIndex === 3 || worldIndex === 4) {
-      moveLimit = blocks.length + 2;
-    } else if (worldIndex === 5) {
-      moveLimit = Math.round(blocks.length * 0.95);
-    } else if (worldIndex >= 6) {
-      moveLimit = Math.round(blocks.length * 0.90);
-    }
-    moveLimit = Math.max(5, moveLimit);
+    let multiplier = 1.35;
+    if (worldIndex === 1) multiplier = 1.45;
+    else if (worldIndex === 2) multiplier = 1.35;
+    else if (worldIndex === 3) multiplier = 1.28;
+    else if (worldIndex === 4) multiplier = 1.25;
+    else if (worldIndex === 5) multiplier = 1.20;
+    else if (worldIndex >= 6) multiplier = 1.15;
+
+    const moveLimit = Math.max(12, Math.round(blocks.length * multiplier + 4));
 
     return {
       worldIndex, levelIndex,
@@ -72,7 +68,7 @@ class LevelGenerator {
     const coords: Vec3[] = [];
 
     if (w === 1) {
-      // World 1: Jelly Hills (Simple, easy shapes)
+      // World 1: Jelly Hills (Warm-up & Flowing Curves)
       if (l === 1) {
         // Level 1: Compact Cross (7 blocks)
         coords.push(v3(0, 0, 0));
@@ -112,13 +108,13 @@ class LevelGenerator {
         // Level 5: Double Helix Columns (24 blocks)
         for (let y = -3; y <= 3; y++) {
           const a = (y / 3) * Math.PI;
-          coords.push(v3(Math.round(Math.cos(a) * 1.2), y, Math.round(Math.sin(a) * 1.2)));
-          coords.push(v3(Math.round(Math.cos(a + Math.PI) * 1.2), y, Math.round(Math.sin(a + Math.PI) * 1.2)));
+          coords.push(v3(Math.round(Math.cos(a) * 1.3), y, Math.round(Math.sin(a) * 1.3)));
+          coords.push(v3(Math.round(Math.cos(a + Math.PI) * 1.3), y, Math.round(Math.sin(a + Math.PI) * 1.3)));
         }
       }
 
     } else if (w === 2) {
-      // World 2: Dino Valley (Increased Difficulty)
+      // World 2: Dino Valley (Increased Difficulty & Bombs)
       if (l === 1) {
         // Level 1: Lava Wall with a Bomb Core (22 blocks)
         for (let x = -2; x <= 2; x++) {
@@ -140,7 +136,7 @@ class LevelGenerator {
           coords.push(v3(Math.round(Math.cos(a) * 3), 0, Math.round(Math.sin(a) * 3)));
         }
       } else if (l === 3) {
-        // Level 3: Rotator Wheel with spinning arms (28 blocks)
+        // Level 3: Rotator Turbine with spinning arms (28 blocks)
         for (let x = 0; x <= 1; x++) {
           for (let z = 0; z <= 1; z++) {
             coords.push(v3(x - 0.5, 0, z - 0.5));
@@ -153,7 +149,7 @@ class LevelGenerator {
           coords.push(v3(0, 0, -i));
         }
       } else if (l === 4) {
-        // Level 4: Claw footprint (32 blocks)
+        // Level 4: Dino Claw footprint (32 blocks)
         for (let x = -1; x <= 1; x++) for (let z = -1; z <= 1; z++) coords.push(v3(x, 0, z));
         for (let x = -1; x <= 1; x++) for (let z = -1; z <= 1; z++) coords.push(v3(x, -2, z));
         for (let i = 1; i <= 4; i++) {
@@ -162,7 +158,7 @@ class LevelGenerator {
           coords.push(v3(i, i, 0));
         }
       } else {
-        // Level 5: Maze Castle (38 blocks)
+        // Level 5: Mesozoic Castle Ramparts (38 blocks)
         for (let x = -2; x <= 2; x++) for (let z = -2; z <= 2; z++) {
           if (Math.abs(x) === 2 || Math.abs(z) === 2) coords.push(v3(x, -1, z));
         }
@@ -180,7 +176,7 @@ class LevelGenerator {
       }
 
     } else if (w === 3) {
-      // World 3: Cosmo Station (High complexity & massive size)
+      // World 3: Cosmo Station (High complexity & Rainbow panels)
       if (l === 1) {
         // Level 1: Satellite Dish with Orbiting Rainbow Panels (30 blocks)
         for (let y = -2; y <= 2; y++) coords.push(v3(0, y, 0));
@@ -213,7 +209,7 @@ class LevelGenerator {
           coords.push(v3(4, Math.round(Math.sin(i) * 1.5), Math.round(Math.cos(i) * 1.5)));
         }
       } else if (l === 3) {
-        // Level 3: Hollow Cylindrical Station Capsule (40 blocks)
+        // Level 3: Space Station Cylinder Capsule (40 blocks)
         for (let y = -2; y <= 2; y++) {
           for (let i = 0; i < 8; i++) {
             const a = (i / 8) * Math.PI * 2;
@@ -241,7 +237,7 @@ class LevelGenerator {
       }
 
     } else if (w === 4) {
-      // World 4: Coral Reef (Helix Vortex, whirlpools, interlocking chains)
+      // World 4: Coral Reef (Interlocking chains & Whirlpools)
       if (l === 1) {
         // Level 1: Coral Branch tree layout (32 blocks)
         for (let y = -3; y <= 2; y++) coords.push(v3(0, y, 0));
@@ -328,7 +324,7 @@ class LevelGenerator {
           }
         }
       } else if (l === 4) {
-        // Level 4: Grid-based Glacier Maze (52 blocks)
+        // Level 4: Grid-based Glacier Labyrinth (52 blocks)
         for (let x = -2; x <= 2; x++) {
           for (let y = -1; y <= 1; y++) {
             for (let z = -2; z <= 2; z++) {
@@ -339,7 +335,7 @@ class LevelGenerator {
           }
         }
       } else {
-        // Level 5: Symmetrical Crystal Palace dome (64 blocks)
+        // Level 5: Crystal Palace dome (64 blocks)
         for (let y = -2; y <= 2; y++) {
           const r = y === 2 ? 1.5 : y === 1 ? 2.5 : 3.5;
           const steps = y === 2 ? 8 : y === 1 ? 12 : 16;
@@ -355,7 +351,7 @@ class LevelGenerator {
       }
 
     } else {
-      // World 6: Volcanic Land (Magma core, lava pit, extreme structures)
+      // World 6: Volcanic Land (Extreme structures & Doomsday challenges)
       if (l === 1) {
         // Level 1: Spherical Magma Shell around core (40 blocks)
         for (let x = -2; x <= 2; x++) {
@@ -409,7 +405,7 @@ class LevelGenerator {
         }
         coords.push(v3(0, 0, 0)); coords.push(v3(1, 0, 0));
       } else {
-        // Level 5: Dense Doomsday Matrix shell (72 blocks)
+        // Level 5: Dense Doomsday Reactor Matrix (72 blocks)
         for (let x = -3; x <= 3; x++) {
           for (let y = -2; y <= 2; y++) {
             for (let z = -3; z <= 3; z++) {

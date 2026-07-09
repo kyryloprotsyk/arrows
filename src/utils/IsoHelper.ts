@@ -195,7 +195,7 @@ export function drawIsoCube(
   g.lineTo(rightX, rightY);
   g.strokePath();
 
-  // 4. Glow edge highlights — multiple overlapping lines for bloom effect
+  // 4. Multi-Layered Concentric Outer Glows & Bloom Edge Highlights
   type Seg = [number, number, number, number]; // x1,y1,x2,y2
   const edges: Seg[] = [
     [topX,topY,   rightX,rightY], [topX,topY,   leftX,leftY],
@@ -205,10 +205,10 @@ export function drawIsoCube(
     [lbX,lbY,    bbX,bbY], [rbX,rbY, bbX,bbY]
   ];
 
-  // Draw 3 passes for glow bloom effect
-  for (let pass = 0; pass < 3; pass++) {
-    const alpha = glowAlpha * [0.15, 0.3, 0.55][pass];
-    const width  = [5, 3, 1.5][pass];
+  // Draw 4 concentric bloom passes for neon glass aura
+  for (let pass = 0; pass < 4; pass++) {
+    const alpha = glowAlpha * [0.10, 0.25, 0.48, 0.88][pass];
+    const width  = [10, 6, 3, 1.3][pass];
     g.lineStyle(width, glowCol, alpha);
     for (const [ax, ay, bx, by] of edges) {
       g.beginPath();
@@ -217,6 +217,11 @@ export function drawIsoCube(
       g.strokePath();
     }
   }
+
+  // Soft base aura glow beneath block
+  const baseAura = tPt(cx, cy + bh);
+  g.fillStyle(glowCol, glowAlpha * 0.18);
+  g.fillEllipse(baseAura.x, baseAura.y, tw * 1.8 * scaleX, th * 1.4 * scaleY);
 }
 
 /** HSL → 0xRRGGBB integer (for Phaser fillStyle). */
@@ -254,9 +259,9 @@ export function getBlockPalette(worldIndex: number, posHash: number) {
   const h = hues[((posHash % hues.length) + hues.length) % hues.length];
 
   return {
-    top:   hslToInt(h, 100, 75),
+    top:   hslToInt(h, 100, 78),
     left:  hslToInt(h, 100, 56),
-    right: hslToInt(h, 95, 40),
+    right: hslToInt(h, 95, 36),
     glow:  hslToInt(h, 100, 88)
   };
 }
@@ -481,6 +486,37 @@ export function drawHat(
       g.strokeEllipse(c.x, c.y, tw * 0.44, th * 0.44);
       g.lineStyle(1.5, col2, 0.6);
       g.strokeEllipse(c2.x, c2.y, tw * 0.32, th * 0.32);
+      break;
+    }
+
+    case 'dragon': {
+      const c = tPt(hx, hy - 14);
+      // Dragon horn base
+      g.fillStyle(0xd92323, 1);
+      g.fillTriangle(c.x - 14, c.y + 4, c.x - 6, c.y + 4, c.x - 16, c.y - 12);
+      g.fillTriangle(c.x + 14, c.y + 4, c.x + 6, c.y + 4, c.x + 16, c.y - 12);
+      // Gold horn tips
+      g.fillStyle(0xffd700, 1);
+      g.fillTriangle(c.x - 12, c.y - 6, c.x - 16, c.y - 12, c.x - 9, c.y - 5);
+      g.fillTriangle(c.x + 12, c.y - 6, c.x + 16, c.y - 12, c.x + 9, c.y - 5);
+      // Center dragon crest
+      g.fillStyle(0xff5500, 0.9);
+      g.fillCircle(c.x, c.y - 2, 5);
+      break;
+    }
+
+    case 'golden_crown': {
+      const c = tPt(hx, hy - 16);
+      // Golden crown band and peaks
+      g.fillStyle(0xffcc00, 1);
+      g.fillTriangle(c.x - 14, c.y + 8, c.x - 4, c.y + 8, c.x - 16, c.y - 10);
+      g.fillTriangle(c.x - 8, c.y + 8, c.x + 8, c.y + 8, c.x, c.y - 14);
+      g.fillTriangle(c.x + 4, c.y + 8, c.x + 14, c.y + 8, c.x + 16, c.y - 10);
+      // Ruby gems
+      g.fillStyle(0xff0044, 1);
+      g.fillCircle(c.x - 16, c.y - 10, 2.5);
+      g.fillCircle(c.x, c.y - 14, 3);
+      g.fillCircle(c.x + 16, c.y - 10, 2.5);
       break;
     }
   }

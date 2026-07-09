@@ -87,13 +87,41 @@ export class MenuScene extends Phaser.Scene {
     // Pulsing glow on title
     this.tweens.add({ targets: title1, scaleX: 1.04, scaleY: 1.04, duration: 1200, yoyo: true, repeat: -1, ease: 'Sine.InOut' });
 
+    // --- Profile & Prestige Top Bar ---
+    const topBar = this.add.container(W / 2, Math.max(28, H * 0.055));
+    const topBarBg = this.add.graphics();
+    const topW = Math.min(W - 40, 290), topH = 38;
+    topBarBg.fillStyle(0x2d1854, 0.9);
+    topBarBg.fillRoundedRect(-topW / 2, -topH / 2, topW, topH, 19);
+    topBarBg.lineStyle(2, 0x00ffcc, 0.9);
+    topBarBg.strokeRoundedRect(-topW / 2, -topH / 2, topW, topH, 19);
+
+    const userEmo = GameData.avatar.get();
+    const userName = GameData.username.get();
+    const userLvl = GameData.playerXP.getLevel();
+    const topBarTxt = this.add.text(0, 0, `${userEmo} ${userName} • Lvl ${userLvl} ⭐`, {
+      fontFamily: 'Fredoka', fontSize: Math.min(topW * 0.065, 16) + 'px', color: '#00ffcc', fontStyle: 'bold'
+    }).setOrigin(0.5);
+
+    topBar.add([topBarBg, topBarTxt]);
+    topBar.setSize(topW, topH).setInteractive({ useHandCursor: true });
+    topBar.on('pointerdown', () => {
+      audio.playTap();
+      this.cameras.main.fadeOut(280, 0, 0, 20);
+      this.time.delayedCall(300, () => this.scene.start('Profile'));
+    });
+
     // --- Buttons Layout ---
-    const btnPlayY = H * 0.42;
-    const btnShopY = H * 0.80;
-    const coinY = btnShopY + 54;
+    const btnPlayY = H * 0.40;
+    const btnDailyY = H * 0.70;
+    const btnLdbY = btnDailyY + 50;
+    const btnShopY = btnLdbY + 50;
+    const coinY = btnShopY + 44;
     
     const btnPlayBg = this.createNeonButton(W / 2, btnPlayY, 220, 58, 0xff6eb4, 0xff0088, 'PLAY  GAME', 0);
-    const btnShopBg = this.createNeonButton(W / 2, btnShopY, 200, 52, 0x9b72ff, 0x6600ff, 'SKINS  SHOP', 200);
+    const btnDailyBg = this.createNeonButton(W / 2, btnDailyY, 240, 46, 0x00bb88, 0x00ffcc, '📅 DAILY CHALLENGE', 100);
+    const btnLdbBg = this.createNeonButton(W / 2, btnLdbY, 240, 46, 0xffa500, 0xffe45e, '🏆 LEADERBOARDS', 150);
+    const btnShopBg = this.createNeonButton(W / 2, btnShopY, 200, 46, 0x9b72ff, 0x6600ff, 'SKINS  SHOP', 200);
 
     // Coin display
     const coinText = this.add.text(W / 2, coinY, `🪙 ${GameData.coins.get()} Coins`, {
@@ -105,7 +133,7 @@ export class MenuScene extends Phaser.Scene {
     this.createMuteButton(W, H);
 
     // Info
-    this.add.text(W / 2, H * 0.94, '🔄 Drag to rotate  •  👆 Tap to escape  •  💣 Bomb magic!', {
+    this.add.text(W / 2, H * 0.965, '🔄 Drag to rotate  •  👆 Tap to escape  •  💣 Bomb magic!', {
       fontFamily: 'Fredoka', fontSize: Math.min(W * 0.032, 14) + 'px', color: '#665588'
     }).setOrigin(0.5);
 
@@ -113,6 +141,18 @@ export class MenuScene extends Phaser.Scene {
     btnPlayBg.on('pointerdown', () => {
       audio.playTap();
       this.launchBuddyAndTransition();
+    });
+
+    btnDailyBg.on('pointerdown', () => {
+      audio.playTap();
+      this.cameras.main.fadeOut(300, 0, 0, 20);
+      this.time.delayedCall(320, () => this.scene.start('DailyChallenge'));
+    });
+
+    btnLdbBg.on('pointerdown', () => {
+      audio.playTap();
+      this.cameras.main.fadeOut(300, 0, 0, 20);
+      this.time.delayedCall(320, () => this.scene.start('Leaderboard'));
     });
 
     btnShopBg.on('pointerdown', () => {

@@ -3,12 +3,16 @@ import Phaser from 'phaser';
 import { GameData } from '../utils/GameData';
 import { hslToInt, getBlockPalette, TILE_W, TILE_H, BLOCK_H, drawHat } from '../utils/IsoHelper';
 import { audio } from '../audio';
+import { AdManager } from '../utils/AdManager';
 
 export class VictoryScene extends Phaser.Scene {
   constructor() { super({ key: 'Victory' }); }
 
-  create(data: { world: number; level: number; stars: number; reward: number; movesLeft: number }) {
-    const { world, level, stars, reward } = data;
+  create(data: {
+    world: number; level: number; stars: number; reward: number; movesLeft: number;
+    isDaily?: boolean; xpEarned?: number; oldLevel?: number; newLevel?: number; userRank?: number
+  }) {
+    const { world, level, stars, reward, isDaily, xpEarned, oldLevel, newLevel, userRank } = data;
     const W = this.scale.width, H = this.scale.height;
 
     this.cameras.main.setBackgroundColor('#0a001a');
@@ -34,10 +38,11 @@ export class VictoryScene extends Phaser.Scene {
     // Animated isometric trophy block
     this.createTrophyBlock(W / 2, H * 0.22, world);
 
-    // LEVEL CLEAR heading
-    const clearTxt = this.add.text(W / 2, H * 0.36, '✨ LEVEL CLEAR! ✨', {
+    // LEVEL CLEAR / DAILY COMPLETE heading
+    const clearTitle = isDaily ? '🔥 DAILY COMPLETE! (+150 🪙)' : '✨ LEVEL CLEAR! ✨';
+    const clearTxt = this.add.text(W / 2, H * 0.35, clearTitle, {
       fontFamily: 'Fredoka',
-      fontSize: Math.min(W * 0.09, 52) + 'px',
+      fontSize: Math.min(W * (isDaily ? 0.075 : 0.09), 48) + 'px',
       color: '#ffe45e',
       stroke: '#ffffff', strokeThickness: 4,
       shadow: { offsetX: 0, offsetY: 6, color: '#ffa500', blur: 24, fill: true }
@@ -49,10 +54,24 @@ export class VictoryScene extends Phaser.Scene {
     });
 
     // Star rating display
-    this.createStarRow(W / 2, H * 0.47, stars);
+    this.createStarRow(W / 2, H * 0.45, stars);
 
     // Stats card
-    this.createStatsCard(W / 2, H * 0.62, reward, data.movesLeft);
+    this.createStatsCard(W / 2, H * 0.56, reward, xpEarned, userRank);
+
+    // Level up check
+    if (newLevel && oldLevel && newLevel > oldLevel) {
+      GameData.coins.add(100);
+      const lvlUpBanner = this.add.text(W / 2, H * 0.64, `🎉 LEVEL UP! Lvl ${oldLevel} → ${newLevel}! (+100 Bonus Coins) 🎉`, {
+        fontFamily: 'Fredoka', fontSize: Math.min(W * 0.045, 17) + 'px',
+        color: '#00ffcc', backgroundColor: '#002244ee', padding: { x: 14, y: 6 }
+      }).setOrigin(0.5).setDepth(15).setAlpha(0);
+
+      this.tweens.add({
+        targets: lvlUpBanner, alpha: 1, y: H * 0.635,
+        duration: 500, delay: 1000, ease: 'Back.Out'
+      });
+    }
 
     // Proportional next level logic (clearing Level 5 automatically moves to next World's Level 1)
     let nextWorld = world;
@@ -61,25 +80,53 @@ export class VictoryScene extends Phaser.Scene {
     if (nextLevel > 5) {
       nextLevel = 1;
       nextWorld = world + 1;
-      if (nextWorld > 3) {
+      if (nextWorld > 6) {
         hasNext = false;
       }
     }
 
-    const btnNext = this.createBtn(
-      W / 2, H * 0.79, 220, 52, 0xff6eb4, 0xff0088,
-      hasNext ? (nextWorld !== world ? `Next World ${nextWorld} →` : `Next Level ${nextLevel} →`) : '🌍 World Select',
-      0
+    // 3X Rewarded Ad Bonus Button
+    const btnAd = this.createBtn(
+      W / 2, H * 0.70, 260, 48, 0x00bb88, 0x00ffcc, `👑 Watch Ad for 3X Coins! (+${reward * 2}🪙)`, 0
     );
 
-    const btnRetry = this.createBtn(W / 2, H * 0.87, 180, 44, 0x664466, 0x9b72ff, '🔄 Play Again', 100);
+    const btnNextText = isDaily ? '📅 Daily Calendar →' : (hasNext ? (nextWorld !== world ? `Next World ${nextWorld} →` : `Next Level ${nextLevel} →`) : '🌍 World Select');
+    const btnNext = this.createBtn(
+      W / 2, H * 0.81, 230, 52, 0xff6eb4, 0xff0088,
+      btnNextText,
+      100
+    );
+
+    const btnRetry = this.createBtn(W / 2, H * 0.90, 180, 44, 0x664466, 0x9b72ff, '🔄 Play Again', 200);
+
+    btnAd.on('pointerdown', async () => {
+      audio.playTap();
+      const success = await AdManager.showRewardedAd('3x_coins');
+      if (success) {
+        const bonus = reward * 2;
+        GameData.coins.add(bonus);
+        audio.playVictory();
+        btnAd.destroy();
+        const burst = this.add.particles(0, 0, 'star_particle', {
+          x: { min: W * 0.3, max: W * 0.7 },
+          y: { min: H * 0.65, max: H * 0.75 },
+          speed: { min: 80, max: 260 },
+          scale: { start: 1.6, end: 0 },
+          lifespan: 1600,
+          tint: [0xffe45e, 0xff6eb4, 0x00ffcc]
+        });
+        this.time.delayedCall(1700, () => burst.destroy());
+      }
+    });
 
     btnNext.on('pointerdown', () => {
       audio.playTap();
       this.cameras.main.fadeOut(300, 10, 0, 26);
       this.time.delayedCall(320, () => {
         confetti.destroy();
-        if (hasNext) {
+        if (isDaily) {
+          this.scene.start('DailyChallenge');
+        } else if (hasNext) {
           this.scene.start('Game', { world: nextWorld, level: nextLevel });
         } else {
           this.scene.start('WorldSelect');
@@ -202,27 +249,31 @@ export class VictoryScene extends Phaser.Scene {
     }
   }
 
-  private createStatsCard(cx: number, cy: number, reward: number, movesLeft: number) {
-    const w = Math.min(this.scale.width * 0.7, 300), h = 70;
+  private createStatsCard(cx: number, cy: number, reward: number, xpEarned?: number, userRank?: number) {
+    const w = Math.min(this.scale.width * 0.85, 330), h = 76;
     const g = this.add.graphics().setAlpha(0);
-    g.fillStyle(0x1a0040, 0.85);
+    g.fillStyle(0x1a0040, 0.9);
     g.fillRoundedRect(cx - w / 2, cy - h / 2, w, h, 16);
-    g.lineStyle(1.5, 0x9b72ff, 0.5);
+    g.lineStyle(1.5, 0x00ffcc, 0.6);
     g.strokeRoundedRect(cx - w / 2, cy - h / 2, w, h, 16);
 
-    const coins = this.add.text(cx - w / 4, cy - 10, `🪙 +${reward}`, {
-      fontFamily: 'Fredoka', fontSize: '22px', color: '#ffe45e'
+    const coins = this.add.text(cx - w * 0.28, cy - 14, `🪙 +${reward}`, {
+      fontFamily: 'Fredoka', fontSize: '20px', color: '#ffe45e', fontStyle: 'bold'
     }).setOrigin(0.5).setAlpha(0);
 
-    const moves = this.add.text(cx + w / 4, cy - 10, `⚡ ${movesLeft} left`, {
-      fontFamily: 'Fredoka', fontSize: '22px', color: '#74c0fc'
+    const xp = this.add.text(cx, cy - 14, `⚡ +${xpEarned || 85} XP`, {
+      fontFamily: 'Fredoka', fontSize: '20px', color: '#00ffcc', fontStyle: 'bold'
     }).setOrigin(0.5).setAlpha(0);
 
-    const total = this.add.text(cx, cy + 20, `Total coins: ${GameData.coins.get()}`, {
-      fontFamily: 'Fredoka', fontSize: '15px', color: '#9b72ff'
+    const moves = this.add.text(cx + w * 0.28, cy - 14, `🔥 ${GameData.winStreak.get()}x Streak`, {
+      fontFamily: 'Fredoka', fontSize: '18px', color: '#ff6eb4', fontStyle: 'bold'
     }).setOrigin(0.5).setAlpha(0);
 
-    this.tweens.add({ targets: [g, coins, moves, total], alpha: 1, duration: 500, delay: 900 });
+    const total = this.add.text(cx, cy + 18, `Total: ${GameData.coins.get()}🪙  •  Global Rank: #${userRank || 15} 🏆`, {
+      fontFamily: 'Fredoka', fontSize: '14px', color: '#ccbbff'
+    }).setOrigin(0.5).setAlpha(0);
+
+    this.tweens.add({ targets: [g, coins, xp, moves, total], alpha: 1, duration: 500, delay: 900 });
   }
 
   private createBtn(

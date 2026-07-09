@@ -8,7 +8,9 @@ export const SKIN_LIST = [
   { id: 'tophat',    name: 'Top Hat',     emoji: '🎩', rarity: 'rare',      hue: 210 },
   { id: 'chef',      name: 'Chef Hat',    emoji: '👨‍🍳', rarity: 'common',    hue: 30  },
   { id: 'propeller', name: 'Propeller',   emoji: '🪁', rarity: 'epic',      hue: 150 },
-  { id: 'rainbow',   name: 'Rainbow',     emoji: '🌈', rarity: 'legendary', hue: 180 }
+  { id: 'rainbow',   name: 'Rainbow',     emoji: '🌈', rarity: 'legendary', hue: 180 },
+  { id: 'dragon',    name: 'Dragon Head', emoji: '🐉', rarity: 'legendary', hue: 10  },
+  { id: 'golden_crown', name: 'Gold Trophy Crown', emoji: '👑', rarity: 'legendary', hue: 50 }
 ];
 
 export function getSkinById(id: string) {

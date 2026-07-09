@@ -8,6 +8,7 @@ import {
 import { levelGenerator } from '../levelGenerator';
 import type { BlockConfig, LevelData } from '../levelGenerator';
 import { GameData } from '../utils/GameData';
+import { LeaderboardService } from '../utils/LeaderboardService';
 import { audio } from '../audio';
 
 interface BuddyBlock extends BlockConfig {
@@ -52,6 +53,7 @@ export class GameScene extends Phaser.Scene {
   private comboCount = 0;
   private lastEscapeTime = 0;
   private activeSkin = 'none';
+  private isDaily = false;
 
   // ── Scene center (where puzzle cluster is drawn) ───────────────────────
   private centerX = 0;
@@ -91,9 +93,10 @@ export class GameScene extends Phaser.Scene {
 
   constructor() { super({ key: 'Game' }); }
 
-  init(data: { world?: number; level?: number }) {
+  init(data: { world?: number; level?: number; isDaily?: boolean }) {
     this.worldIndex = data.world ?? GameData.world.get();
     this.levelIndex = data.level ?? GameData.level.get();
+    this.isDaily = !!data.isDaily;
     this.coins = GameData.coins.get();
     this.rotState = 0;
     this.panX = this.panTargetX = 0;
@@ -870,44 +873,88 @@ export class GameScene extends Phaser.Scene {
       g.fillPath();
     }
 
-    // ─── FACE: Eyes ───────────────────────────────────────────────────
+    // ─── FACE: Eyes & Expressions ─────────────────────────────────────
     if (b.type !== 'chest' || !isLocked) {
       const eyeY = cy - 4;
       const eyeScaleY = b.isBlinking ? 0.15 : 1;
 
-      // Left eye
-      g.fillStyle(0x111111, 1);
-      const le = tPt(cx - 10, eyeY);
-      g.fillEllipse(le.x, le.y, 8 * scaleX, 7 * eyeScaleY * scaleY);
-      
-      // Right eye
-      const re = tPt(cx + 10, eyeY);
-      g.fillEllipse(re.x, re.y, 8 * scaleX, 7 * eyeScaleY * scaleY);
-
-      if (!b.isBlinking) {
-        // Pupil highlights
-        g.fillStyle(0xffffff, 0.8);
-        const lhl = tPt(cx - 8, eyeY - 1);
-        const rhl = tPt(cx + 12, eyeY - 1);
-        g.fillCircle(lhl.x, lhl.y, 2 * Math.min(scaleX, scaleY));
-        g.fillCircle(rhl.x, rhl.y, 2 * Math.min(scaleX, scaleY));
-
-        // Blush cheeks
-        g.fillStyle(0xff79a8, 0.4);
-        const lc = tPt(cx - 16, eyeY + 4);
-        const rc = tPt(cx + 16, eyeY + 4);
-        g.fillEllipse(lc.x, lc.y, 10 * scaleX, 5 * scaleY);
-        g.fillEllipse(rc.x, rc.y, 10 * scaleX, 5 * scaleY);
-      }
-
       if (b.state === 'bump') {
-        // X eyes
+        // Dizzy / Bumped X-eyes + sweat/dizzy lines
+        g.lineStyle(3, 0x111111, 1);
+        const le = tPt(cx - 10, eyeY);
+        const re = tPt(cx + 10, eyeY);
+        const sz = 4 * Math.min(scaleX, scaleY);
+        g.lineBetween(le.x - sz, le.y - sz, le.x + sz, le.y + sz);
+        g.lineBetween(le.x - sz, le.y + sz, le.x + sz, le.y - sz);
+        g.lineBetween(re.x - sz, re.y - sz, re.x + sz, re.y + sz);
+        g.lineBetween(re.x - sz, re.y + sz, re.x + sz, re.y - sz);
+
+        // Frown mouth
+        const m = tPt(cx, eyeY + 8);
+        g.lineStyle(2, 0x333333, 0.9);
+        g.beginPath();
+        g.arc(m.x, m.y + 3, 5 * Math.min(scaleX, scaleY), Math.PI * 1.1, Math.PI * 1.9);
+        g.strokePath();
+      } else if (b.state === 'anticipation') {
+        // Shocked / Wide-eyed O-mouth!
         g.fillStyle(0x111111, 1);
-        fillTransformedRect(cx - 13, eyeY - 1, 7, 2);
-        fillTransformedRect(cx - 10, eyeY - 4, 2, 7);
-        fillTransformedRect(cx + 7, eyeY - 1, 7, 2);
-        fillTransformedRect(cx + 10, eyeY - 4, 2, 7);
+        const le = tPt(cx - 10, eyeY);
+        const re = tPt(cx + 10, eyeY);
+        g.fillCircle(le.x, le.y, 5.5 * Math.min(scaleX, scaleY));
+        g.fillCircle(re.x, re.y, 5.5 * Math.min(scaleX, scaleY));
+        g.fillStyle(0xffffff, 1);
+        g.fillCircle(tPt(cx - 8, eyeY - 1).x, tPt(cx - 8, eyeY - 1).y, 2.5 * Math.min(scaleX, scaleY));
+        g.fillCircle(tPt(cx + 12, eyeY - 1).x, tPt(cx + 12, eyeY - 1).y, 2.5 * Math.min(scaleX, scaleY));
+
+        // Open circle mouth
+        g.fillStyle(0x111111, 1);
+        const m = tPt(cx, eyeY + 9);
+        g.fillCircle(m.x, m.y, 4 * Math.min(scaleX, scaleY));
+      } else if (b.state === 'escaping') {
+        // Happy Winking Right Eye + Wide Left Eye + Big grin!
+        g.fillStyle(0x111111, 1);
+        const le = tPt(cx - 10, eyeY);
+        g.fillEllipse(le.x, le.y, 8 * scaleX, 8 * scaleY);
+        g.fillStyle(0xffffff, 0.9);
+        g.fillCircle(tPt(cx - 8, eyeY - 1).x, tPt(cx - 8, eyeY - 1).y, 2 * Math.min(scaleX, scaleY));
+
+        // Wink right eye (upward curve)
+        g.lineStyle(3, 0x111111, 1);
+        const re = tPt(cx + 10, eyeY);
+        g.beginPath();
+        g.arc(re.x, re.y + 2, 5 * Math.min(scaleX, scaleY), Math.PI * 1.1, Math.PI * 1.9);
+        g.strokePath();
+
+        // Big excited open grin
+        const m = tPt(cx, eyeY + 8);
+        g.fillStyle(0x111111, 1);
+        g.beginPath();
+        g.arc(m.x, m.y - 1, 6 * Math.min(scaleX, scaleY), 0, Math.PI);
+        g.closePath();
+        g.fillPath();
       } else {
+        // Idle / Normal eye blink and blush
+        g.fillStyle(0x111111, 1);
+        const le = tPt(cx - 10, eyeY);
+        g.fillEllipse(le.x, le.y, 8 * scaleX, 7 * eyeScaleY * scaleY);
+        
+        const re = tPt(cx + 10, eyeY);
+        g.fillEllipse(re.x, re.y, 8 * scaleX, 7 * eyeScaleY * scaleY);
+
+        if (!b.isBlinking) {
+          g.fillStyle(0xffffff, 0.8);
+          const lhl = tPt(cx - 8, eyeY - 1);
+          const rhl = tPt(cx + 12, eyeY - 1);
+          g.fillCircle(lhl.x, lhl.y, 2 * Math.min(scaleX, scaleY));
+          g.fillCircle(rhl.x, rhl.y, 2 * Math.min(scaleX, scaleY));
+
+          g.fillStyle(0xff79a8, 0.4);
+          const lc = tPt(cx - 16, eyeY + 4);
+          const rc = tPt(cx + 16, eyeY + 4);
+          g.fillEllipse(lc.x, lc.y, 10 * scaleX, 5 * scaleY);
+          g.fillEllipse(rc.x, rc.y, 10 * scaleX, 5 * scaleY);
+        }
+
         // Curved smile
         const s1 = tPt(cx - 5, eyeY + 7);
         const s1m = tPt(cx - 2.5, eyeY + 9.5);
@@ -1073,18 +1120,41 @@ export class GameScene extends Phaser.Scene {
     this.cameras.main.zoomTo(1.2, 700, 'Quad.easeOut');
 
     const stars = this.calcStars();
-    const reward = 15 + this.movesLeft * 2;
-    GameData.setStarsFor(this.worldIndex, this.levelIndex, stars);
+    let reward = 15 + this.movesLeft * 2;
+    if (this.isDaily) {
+      const res = GameData.dailyStreak.checkAndIncrement();
+      reward += 150;
+      if (res.streak >= 7 && !GameData.unlockedSkins.has('dragon')) {
+        GameData.unlockedSkins.add('dragon');
+      } else if (res.streak >= 5 && !GameData.unlockedSkins.has('golden_crown')) {
+        GameData.unlockedSkins.add('golden_crown');
+      }
+    } else {
+      GameData.setStarsFor(this.worldIndex, this.levelIndex, stars);
+      localStorage.setItem(`arrow_buddies_w${this.worldIndex}_level`,
+        Math.min(this.levelIndex + 1, 5).toString());
+    }
     GameData.coins.add(reward);
-    localStorage.setItem(`arrow_buddies_w${this.worldIndex}_level`,
-      Math.min(this.levelIndex + 1, 5).toString());
+
+    // Exact calculations for player progression & leaderboard rank
+    const xpGain = 60 + stars * 35 + (this.comboCount || 1) * 15 + Math.max(0, this.movesLeft) * 6;
+    const xpRes = GameData.playerXP.add(xpGain);
+    GameData.puzzlesSolved.increment();
+    GameData.winStreak.increment();
+    const currentTotalScore = GameData.coins.get() * 10 + GameData.playerXP.get() + GameData.totalStars() * 150;
+    GameData.highScore.setIfHigher(currentTotalScore);
+
+    // Sync online cloud ranking
+    const ldbRes = LeaderboardService.syncAndGetLeaderboard();
 
     this.time.delayedCall(900, () => {
       this.cameras.main.fadeOut(400, 10, 0, 26);
       this.time.delayedCall(420, () => {
         this.scene.start('Victory', {
           world: this.worldIndex, level: this.levelIndex,
-          stars, reward, movesLeft: this.movesLeft
+          stars, reward, movesLeft: this.movesLeft, isDaily: this.isDaily,
+          xpEarned: xpGain, oldLevel: xpRes.oldLevel, newLevel: xpRes.newLevel,
+          userRank: ldbRes.userRank
         });
       });
     });
@@ -1172,7 +1242,11 @@ export class GameScene extends Phaser.Scene {
   }
 
   private updateHUD() {
-    this.hudLevel.setText(`${this.levelData.worldName} — Lvl ${this.levelIndex}`);
+    if (this.isDaily) {
+      this.hudLevel.setText(`📅 Daily Challenge — Day ${GameData.dailyStreak.get()}`);
+    } else {
+      this.hudLevel.setText(`${this.levelData.worldName} — Lvl ${this.levelIndex}`);
+    }
     this.hudCoins.setText(`🪙 ${GameData.coins.get()}`);
     this.hudMoves.setText(`⚡ ${this.movesLeft}`);
 
@@ -1181,7 +1255,7 @@ export class GameScene extends Phaser.Scene {
   }
 
   private showCombo() {
-    const msgs = ['', '🔥 COMBO x2!', '⚡ COMBO x3!', '💥 x4 INSANE!', '🌈 MEGA COMBO!'];
+    const msgs = ['', '🔥 COMBO x2! +10🪙', '⚡ COMBO x3! +15🪙', '💥 x4 INSANE! +20🪙', '🌈 MEGA COMBO! +25🪙'];
     const msg = msgs[Math.min(this.comboCount - 1, msgs.length - 1)];
     this.comboLabel.setText(msg).setAlpha(1).setScale(0.5);
     this.tweens.add({
@@ -1192,8 +1266,13 @@ export class GameScene extends Phaser.Scene {
       }
     });
 
-    // Bounce screen for big combos
-    if (this.comboCount >= 3) this.cameras.main.shake(180, 0.008);
+    if (this.comboCount >= 2) {
+      const bonus = this.comboCount * 5;
+      GameData.coins.add(bonus);
+      this.coins += bonus;
+      this.updateHUD();
+      this.cameras.main.shake(140, 0.005 * Math.min(this.comboCount, 4));
+    }
   }
 
   private showMsg(msg: string) {

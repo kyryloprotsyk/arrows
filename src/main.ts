@@ -8,6 +8,9 @@ import { LevelSelectScene } from './scenes/LevelSelectScene';
 import { GameScene }        from './scenes/GameScene';
 import { VictoryScene }     from './scenes/VictoryScene';
 import { ShopScene }        from './scenes/ShopScene';
+import { DailyChallengeScene } from './scenes/DailyChallengeScene';
+import { LeaderboardScene }    from './scenes/LeaderboardScene';
+import { ProfileScene }        from './scenes/ProfileScene';
 
 /** Returns the true viewport size — respects dvh on iOS/Android. */
 function getViewport() {
@@ -25,7 +28,7 @@ const config: Phaser.Types.Core.GameConfig = {
   type: Phaser.AUTO,
   parent: 'game-container',
   backgroundColor: '#0a001a',
-  scene: [BootScene, MenuScene, WorldSelectScene, LevelSelectScene, GameScene, VictoryScene, ShopScene],
+  scene: [BootScene, MenuScene, WorldSelectScene, LevelSelectScene, GameScene, VictoryScene, ShopScene, DailyChallengeScene, LeaderboardScene, ProfileScene],
   scale: {
     mode: Phaser.Scale.RESIZE,
     autoCenter: Phaser.Scale.CENTER_BOTH,
