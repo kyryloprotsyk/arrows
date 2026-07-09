@@ -361,7 +361,11 @@ export class ShopScene extends Phaser.Scene {
     }).setOrigin(0.5).setAlpha(0).setDepth(6);
 
     if (unlocked) {
-      g.setInteractive(new Phaser.Geom.Rectangle(cx - size / 2, cy - size / 2, size, size), Phaser.Geom.Rectangle.Contains);
+      g.setInteractive({
+        hitArea: new Phaser.Geom.Rectangle(cx - size / 2, cy - size / 2, size, size),
+        hitAreaCallback: Phaser.Geom.Rectangle.Contains,
+        useHandCursor: true
+      });
       g.on('pointerover', () => draw(true, this.activeSkin === skin.id));
       g.on('pointerout',  () => draw(false, this.activeSkin === skin.id));
       g.on('pointerdown', () => {

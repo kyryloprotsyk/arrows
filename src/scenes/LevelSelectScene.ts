@@ -4,7 +4,8 @@ import { GameData } from '../utils/GameData';
 import { audio } from '../audio';
 import {
   TILE_W, TILE_H, BLOCK_H,
-  drawIsoCube, drawHat, hslToInt
+  drawIsoCube, drawHat, hslToInt,
+  drawCartoonCosmicBg, createCosmicEffects
 } from '../utils/IsoHelper';
 
 interface LevelNode {
@@ -42,8 +43,11 @@ export class LevelSelectScene extends Phaser.Scene {
 
     // Background
     this.bgGfx = this.add.graphics();
-    this.drawBg(W, H);
-    this.addStarfield(W, H);
+    // Grid lines color based on world index
+    const worldHues: Record<number, number> = { 1: 330, 2: 175, 3: 270, 4: 195, 5: 210, 6: 15 };
+    const wHue = worldHues[this.worldIndex] ?? 280;
+    drawCartoonCosmicBg(this.bgGfx, W, H, wHue);
+    createCosmicEffects(this, W, H, wHue);
 
     // Graphics layers
     this.pathGfx = this.add.graphics();
@@ -293,29 +297,5 @@ export class LevelSelectScene extends Phaser.Scene {
       g.lineTo(this.nodes[i].x, this.nodes[i].cy + BLOCK_H * 0.5);
     }
     g.strokePath();
-  }
-
-  private drawBg(W: number, H: number) {
-    const g = this.bgGfx;
-    g.clear();
-    const steps = 12;
-    for (let i = steps; i >= 0; i--) {
-      const t = i / steps;
-      const r = Math.round(10 + t * 24);
-      const green = 0;
-      const b = Math.round(26 + t * 50);
-      const col = (r << 16) | (green << 8) | b;
-      const size = (1 - t) * Math.max(W, H) * 1.5;
-      g.fillStyle(col, 0.08 + t * 0.08);
-      g.fillCircle(W / 2, H / 2, size);
-    }
-  }
-
-  private addStarfield(W: number, H: number) {
-    const gfx = this.add.graphics();
-    gfx.fillStyle(0xffffff, 0.4);
-    for (let i = 0; i < 70; i++) {
-      gfx.fillCircle(Math.random() * W, Math.random() * H, Math.random() * 1.2 + 0.3);
-    }
   }
 }

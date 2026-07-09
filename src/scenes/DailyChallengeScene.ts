@@ -126,10 +126,11 @@ export class DailyChallengeScene extends Phaser.Scene {
     btnContainer.add([btnGfx, btnLabel]);
 
     if (!alreadyPlayedToday) {
-      btnContainer.setSize(btnW, btnH).setInteractive(
-        new Phaser.Geom.Rectangle(-btnW / 2, -btnH / 2, btnW, btnH),
-        Phaser.Geom.Rectangle.Contains
-      );
+      btnContainer.setSize(btnW, btnH).setInteractive({
+        hitArea: new Phaser.Geom.Rectangle(-btnW / 2, -btnH / 2, btnW, btnH),
+        hitAreaCallback: Phaser.Geom.Rectangle.Contains,
+        useHandCursor: true
+      });
       btnContainer.on('pointerover', () => drawBtn(true));
       btnContainer.on('pointerout',  () => drawBtn(false));
       btnContainer.on('pointerdown', () => {

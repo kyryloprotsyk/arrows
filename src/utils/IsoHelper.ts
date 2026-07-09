@@ -132,68 +132,55 @@ export function drawIsoCube(
     g.fillPath();
   };
 
-  // Hidden back-bottom vertex (shifted down from top vertex A by bh)
-  let backX = cx, backY = cy - th + bh;
-  if (transformer) {
-    const tBack = transformer(backX, backY);
-    backX = tBack.x; backY = tBack.y;
-  }
-
-  // Draw hidden back faces first for realistic transparency
-  g.fillStyle(leftCol, 0.12);
-  fillPoly([topX, topY, leftX, leftY, lbX, lbY, backX, backY]);
-  
-  g.fillStyle(rightCol, 0.12);
-  fillPoly([topX, topY, rightX, rightY, rbX, rbY, backX, backY]);
-
-  g.fillStyle(topCol, 0.12);
-  fillPoly([backX, backY, lbX, lbY, bbX, bbY, rbX, rbY]);
-
-  // Draw back wireframe structure
-  g.lineStyle(1.2, 0xffffff, 0.08);
-  g.beginPath();
-  g.moveTo(backX, backY); g.lineTo(topX, topY);
-  g.moveTo(backX, backY); g.lineTo(lbX, lbY);
-  g.moveTo(backX, backY); g.lineTo(rbX, rbY);
+  // Cel-shaded / Solid style: No transparent backfaces
+  // Instead, we will draw thick black/dark outlines behind the block to act as ambient occlusion
+  g.lineStyle(6, 0x000000, 0.4);
+  fillPoly([topX, topY, rightX, rightY, rbX, rbY, bbX, bbY, lbX, lbY, leftX, leftY]);
   g.strokePath();
 
-  // Draw inner glowing core
+  // Draw front visible faces (SOLID OPACITY) for high-contrast sharpness
+  g.fillStyle(rightCol, 1.0);
+  fillPoly([rightX, rightY, botX, botY, bbX, bbY, rbX, rbY]);
+
+  g.fillStyle(leftCol, 1.0);
+  fillPoly([leftX, leftY, botX, botY, bbX, bbY, lbX, lbY]);
+
+  g.fillStyle(topCol, 1.0);
+  fillPoly([topX, topY, rightX, rightY, botX, botY, leftX, leftY]);
+
+  // Ambient Occlusion Shadows (Darken inner edges)
+  g.lineStyle(4, 0x000000, 0.5);
+  g.beginPath();
+  g.moveTo(botX, botY); g.lineTo(bbX, bbY); // vertical center seam
+  g.strokePath();
+
+  g.lineStyle(2, 0x000000, 0.3);
+  g.beginPath();
+  g.moveTo(leftX, leftY); g.lineTo(botX, botY); g.lineTo(rightX, rightY);
+  g.strokePath();
+
+  // Hard-edged Cel-Shading Gloss Highlights (Crisp vectors instead of soft gradients)
+  g.fillStyle(0xffffff, 0.4);
+  // Sharp angular highlight on top face
+  fillPoly([
+    topX, topY + 4,
+    (topX + rightX) / 2 - 2, (topY + rightY) / 2,
+    (topX + botX) / 2, (topY + botY) / 2 - 2,
+    (topX + leftX) / 2 + 2, (topY + leftY) / 2
+  ]);
+
+  // Sharp bright bevel on the top-front edge
+  g.lineStyle(3, 0xffffff, 0.8);
+  g.beginPath();
+  g.moveTo(leftX + 2, leftY + 1);
+  g.lineTo(botX, botY + 1);
+  g.lineTo(rightX - 2, rightY + 1);
+  g.strokePath();
+
+  // Inner glowing core (optional, maybe we keep it minimal since it's solid now)
   const scaleX = transformer ? Math.hypot(rightX - leftX, rightY - leftY) / (tw * 2) : 1;
   const scaleY = transformer ? Math.hypot(bbY - topY, bbX - topX) / (th * 2 + bh) : 1;
   const tPt = (x: number, y: number) => transformer ? transformer(x, y) : { x, y };
-
-  const coreCenter = tPt(cx, cy + bh / 2);
-  g.fillStyle(glowCol, 0.35);
-  g.fillEllipse(coreCenter.x, coreCenter.y, 22 * scaleX, 16 * scaleY);
-  g.fillStyle(0xffffff, 0.40);
-  g.fillEllipse(coreCenter.x, coreCenter.y, 10 * scaleX, 7 * scaleY);
-
-  // Draw front visible faces with glass transparency
-  g.fillStyle(rightCol, 0.72);
-  fillPoly([rightX, rightY, botX, botY, bbX, bbY, rbX, rbY]);
-
-  g.fillStyle(leftCol, 0.72);
-  fillPoly([leftX, leftY, botX, botY, bbX, bbY, lbX, lbY]);
-
-  g.fillStyle(topCol, 0.78);
-  fillPoly([topX, topY, rightX, rightY, botX, botY, leftX, leftY]);
-
-  // Top glossy highlights
-  g.fillStyle(0xffffff, 0.22);
-  const topHighlight = tPt(cx - 3, cy - th * 0.55);
-  g.fillEllipse(topHighlight.x, topHighlight.y, 12 * scaleX, 5 * scaleY);
-
-  // Glossy glass reflection overlay (diagonal shine)
-  g.fillStyle(0xffffff, 0.12);
-  fillPoly([topX, topY, (topX + rightX) / 2, (topY + rightY) / 2, (leftX + botX) / 2, (leftY + botY) / 2, leftX, leftY]);
-
-  // White bevel highlight on the front-top edges
-  g.lineStyle(1.5, 0xffffff, 0.32);
-  g.beginPath();
-  g.moveTo(leftX, leftY);
-  g.lineTo(botX, botY);
-  g.lineTo(rightX, rightY);
-  g.strokePath();
 
   // 4. Multi-Layered Concentric Outer Glows & Bloom Edge Highlights
   type Seg = [number, number, number, number]; // x1,y1,x2,y2
@@ -205,11 +192,12 @@ export function drawIsoCube(
     [lbX,lbY,    bbX,bbY], [rbX,rbY, bbX,bbY]
   ];
 
-  // Draw 4 concentric bloom passes for neon glass aura
+  // Draw 4 concentric bloom passes for intense neon cartoon aesthetic
   for (let pass = 0; pass < 4; pass++) {
-    const alpha = glowAlpha * [0.10, 0.25, 0.48, 0.88][pass];
-    const width  = [10, 6, 3, 1.3][pass];
-    g.lineStyle(width, glowCol, alpha);
+    const alpha = glowAlpha * [0.3, 0.5, 0.8, 1.0][pass];
+    const width  = [12, 8, 4, 1.8][pass];
+    const passCol = pass === 3 ? 0xffffff : glowCol; // Inner-most outline is pure white
+    g.lineStyle(width, passCol, alpha);
     for (const [ax, ay, bx, by] of edges) {
       g.beginPath();
       g.moveTo(ax, ay);
@@ -512,7 +500,6 @@ export function drawHat(
       g.fillTriangle(c.x - 14, c.y + 8, c.x - 4, c.y + 8, c.x - 16, c.y - 10);
       g.fillTriangle(c.x - 8, c.y + 8, c.x + 8, c.y + 8, c.x, c.y - 14);
       g.fillTriangle(c.x + 4, c.y + 8, c.x + 14, c.y + 8, c.x + 16, c.y - 10);
-      // Ruby gems
       g.fillStyle(0xff0044, 1);
       g.fillCircle(c.x - 16, c.y - 10, 2.5);
       g.fillCircle(c.x, c.y - 14, 3);
@@ -520,4 +507,116 @@ export function drawHat(
       break;
     }
   }
+}
+
+/** Draws a vibrant cartoon-style cosmic background with a grid floor */
+export function drawCartoonCosmicBg(g: Phaser.GameObjects.Graphics, W: number, H: number, worldHue = 280) {
+  g.clear();
+  
+  // 1. Cosmic Gradient Sky (Deep space blue/purple to bright neon magenta/cyan horizon)
+  const steps = 30;
+  for (let i = 0; i < steps; i++) {
+    const t = i / steps;
+    const hue = worldHue + (1 - t) * 60; // Shifts hue up in the darker regions
+    const lit = 8 + Math.pow(t, 2) * 20; // Dark at top, bright at horizon
+    const alpha = 1;
+    g.fillStyle(hslToInt(hue % 360, 95, lit), alpha);
+    g.fillRect(0, i * (H / steps), W, Math.ceil(H / steps));
+  }
+
+  // 2. Horizon Glow
+  g.fillStyle(hslToInt(worldHue, 100, 60), 0.3);
+  g.fillEllipse(W / 2, H * 0.45, W * 1.5, H * 0.3);
+  g.fillStyle(hslToInt(worldHue, 100, 80), 0.5);
+  g.fillEllipse(W / 2, H * 0.45, W * 0.8, H * 0.15);
+
+  // 3. Synthwave Neon Grid Floor
+  const horizonY = H * 0.45;
+  const vanishingX = W / 2;
+  const gridCol = hslToInt(worldHue, 100, 75);
+
+  g.lineStyle(2, gridCol, 0.4);
+  
+  // Converging vertical-ish lines
+  const lineCount = 16;
+  for (let i = 0; i <= lineCount; i++) {
+    const t = i / lineCount;
+    const startX = W * (t * 3.0 - 1.0); // wide bottom span
+    g.beginPath();
+    g.moveTo(vanishingX, horizonY);
+    g.lineTo(startX, H);
+    g.strokePath();
+  }
+
+  // Horizontal grid lines getting further apart based on perspective
+  for (let j = 0; j < 12; j++) {
+    const pt = Math.pow(j / 11, 2.5); // Perspective scaling
+    const y = horizonY + pt * (H - horizonY);
+    g.lineStyle(2, gridCol, 0.1 + pt * 0.5);
+    g.beginPath();
+    g.moveTo(0, y);
+    g.lineTo(W, y);
+    g.strokePath();
+  }
+}
+
+/** Spawns cartoon-style stars, confetti, and comets */
+export function createCosmicEffects(scene: Phaser.Scene, W: number, H: number, worldHue = 280) {
+  const gfx = scene.add.graphics();
+  
+  // 1. Vibrant Stars
+  for (let i = 0; i < 60; i++) {
+    const x = Math.random() * W;
+    const y = Math.random() * H * 0.6; // mostly above horizon
+    const size = Math.random() * 2 + 1;
+    const isBright = Math.random() > 0.8;
+    
+    gfx.fillStyle(0xffffff, isBright ? 0.9 : 0.4);
+    gfx.fillCircle(x, y, size);
+    
+    if (isBright) {
+      gfx.fillStyle(hslToInt(worldHue, 100, 85), 0.5);
+      gfx.fillCircle(x, y, size * 2.5); // star glow
+    }
+  }
+
+  // 2. Confetti / Floating Neon Bits
+  for (let i = 0; i < 30; i++) {
+    const x = Math.random() * W;
+    const y = Math.random() * H;
+    const w = 4 + Math.random() * 6;
+    const h = 4 + Math.random() * 6;
+    const hue = (worldHue + (Math.random() * 120 - 60)) % 360;
+    
+    gfx.fillStyle(hslToInt(hue, 100, 75), 0.7);
+    
+    if (Math.random() > 0.5) {
+      gfx.fillRect(x, y, w, h);
+    } else {
+      gfx.fillTriangle(x, y, x + w, y + h, x - w, y + h);
+    }
+  }
+
+  // 3. Shooting Stars (Comets)
+  for (let i = 0; i < 3; i++) {
+    const x = Math.random() * W;
+    const y = Math.random() * H * 0.3;
+    gfx.lineStyle(3, 0xffffff, 0.8);
+    gfx.beginPath();
+    gfx.moveTo(x, y);
+    gfx.lineTo(x - 40, y + 20);
+    gfx.strokePath();
+    
+    gfx.lineStyle(6, hslToInt(worldHue, 100, 80), 0.4);
+    gfx.beginPath();
+    gfx.moveTo(x, y);
+    gfx.lineTo(x - 50, y + 25);
+    gfx.strokePath();
+  }
+
+  // Twinkle effect: fade in/out random stars
+  scene.tweens.add({
+    targets: gfx, alpha: { from: 0.7, to: 1 },
+    duration: 1500, yoyo: true, repeat: -1, ease: 'Sine.InOut'
+  });
 }

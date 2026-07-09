@@ -148,7 +148,11 @@ export class WorldSelectScene extends Phaser.Scene {
     container.add([g, emoji, nameText, descText, ...starTexts]);
 
     if (unlocked) {
-      container.setSize(w, h).setInteractive(new Phaser.Geom.Rectangle(-w / 2, -h / 2, w, h), Phaser.Geom.Rectangle.Contains);
+      container.setSize(w, h).setInteractive({
+        hitArea: new Phaser.Geom.Rectangle(-w / 2, -h / 2, w, h),
+        hitAreaCallback: Phaser.Geom.Rectangle.Contains,
+        useHandCursor: true
+      });
       
       container.on('pointerover', () => {
         draw(true);

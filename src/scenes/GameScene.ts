@@ -3,7 +3,8 @@ import Phaser from 'phaser';
 import {
   TILE_W, TILE_H,
   gridToScreen, getDrawDepth, isPointInBlock,
-  drawIsoCube, getBlockPalette, hslToInt, drawHat
+  drawIsoCube, getBlockPalette, hslToInt, drawHat,
+  drawCartoonCosmicBg, createCosmicEffects
 } from '../utils/IsoHelper';
 import { levelGenerator } from '../levelGenerator';
 import type { BlockConfig, LevelData } from '../levelGenerator';
@@ -52,6 +53,7 @@ export class GameScene extends Phaser.Scene {
   private movesTotal = 0;
   private comboCount = 0;
   private lastEscapeTime = 0;
+  private floorHeights: Map<string, number> = new Map();
   private activeSkin = 'none';
   private isDaily = false;
 
@@ -78,9 +80,10 @@ export class GameScene extends Phaser.Scene {
   private blockGfx!: Phaser.GameObjects.Graphics;
   private bgGfx!: Phaser.GameObjects.Graphics;
 
-  // ── Particles ─────────────────────────────────────────────────────────
+  // ── Particles ─────────────────────────────────────────────────────────  // 🌟 Particles 🌟
   private trailEmitter!: Phaser.GameObjects.Particles.ParticleEmitter;
   private boomEmitter!: Phaser.GameObjects.Particles.ParticleEmitter;
+  private shatterEmitter!: Phaser.GameObjects.Particles.ParticleEmitter;
   private confettiEmitter!: Phaser.GameObjects.Particles.ParticleEmitter;
 
   // ── HUD ───────────────────────────────────────────────────────────────
@@ -114,7 +117,10 @@ export class GameScene extends Phaser.Scene {
 
     // Background
     this.bgGfx = this.add.graphics();
-    this.drawBackground(W, H);
+    const worldHues: Record<number, number> = { 1: 330, 2: 175, 3: 270, 4: 195, 5: 210, 6: 15 };
+    const wHue = worldHues[this.worldIndex] ?? 280;
+    drawCartoonCosmicBg(this.bgGfx, W, H, wHue);
+    createCosmicEffects(this, W, H, wHue);
 
     // Graphics layers
     this.blockGfx = this.add.graphics().setDepth(5);
@@ -142,7 +148,9 @@ export class GameScene extends Phaser.Scene {
       const nW = gs.width, nH = gs.height;
       this.centerX = nW / 2;
       this.centerY = nH / 2;
-      this.drawBackground(nW, nH);
+      const worldHues: Record<number, number> = { 1: 330, 2: 175, 3: 270, 4: 195, 5: 210, 6: 15 };
+      const wHue = worldHues[this.worldIndex] ?? 280;
+      drawCartoonCosmicBg(this.bgGfx, nW, nH, wHue);
     });
   }
 
@@ -186,6 +194,14 @@ export class GameScene extends Phaser.Scene {
       } as BuddyBlock;
     });
 
+    // Compute floor heights for gravity
+    this.floorHeights.clear();
+    for (const b of this.buddies) {
+      const key = `${b.x},${b.z}`;
+      const current = this.floorHeights.get(key) ?? Infinity;
+      if (b.y < current) this.floorHeights.set(key, b.y);
+    }
+
     // Camera cinematic intro: start zoomed out, pan to cluster, zoom in
     this.recalcCenter();
     const targetPanX = -this.getClusterCenter().cx;
@@ -203,6 +219,17 @@ export class GameScene extends Phaser.Scene {
 
     // Tutorial tip
     this.showTutorial(world, level);
+
+    // Listen for resume from DefeatScene
+    this.events.on('resume', (_sys: Phaser.Scenes.Systems, data: any) => {
+      if (data && data.bonusMoves) {
+        this.movesLeft += data.bonusMoves;
+        this.movesTotal += data.bonusMoves;
+        this.updateHUD();
+        this.showMsg(`🎉 +${data.bonusMoves} MOVES ADDED!`);
+        this.triggerHaptic(50);
+      }
+    });
   }
 
   private getClusterCenter() {
@@ -238,7 +265,6 @@ export class GameScene extends Phaser.Scene {
   // Input
   // ═══════════════════════════════════════════════════════════════════════
   private setupInput() {
-
 
     // Pointer down
     this.input.on('pointerdown', (p: Phaser.Input.Pointer) => {
@@ -491,24 +517,17 @@ export class GameScene extends Phaser.Scene {
     buddy.bumpDy = -dy * 0.12;
   }
 
-  private startEscape(buddy: BuddyBlock, dir: BlockConfig['dir']) {
+  private startEscape(buddy: BuddyBlock) {
     buddy.state = 'escaping';
     buddy.animT = 0;
-    // Project escape direction to screen space
-    const from = gridToScreen(buddy.x, buddy.y, buddy.z, this.rotState);
-    const to   = gridToScreen(buddy.x + dir.x * 8, buddy.y + dir.y * 8, buddy.z + dir.z * 8, this.rotState);
-    const len  = Math.hypot(to.x - from.x, to.y - from.y) || 1;
-    buddy.escapeVx = ((to.x - from.x) / len) * 16;
-    buddy.escapeVy = ((to.y - from.y) / len) * 16;
-
-    // Motion stretch params
-    buddy.jellyDirX = (to.x - from.x) / len;
-    buddy.jellyDirY = (to.y - from.y) / len;
-    buddy.jellyAngle = Math.atan2(buddy.jellyDirY, buddy.jellyDirX);
-    buddy.jellyScalePara = 1.40;
-    buddy.jellyScalePerp = 0.70;
-
-    this.spawnTrailParticles(buddy);
+    
+    // Instead of flying off screen, they instantly shatter with a satisfying crunch!
+    // We set animT to 999 to trigger immediate removal in the update loop
+    buddy.animT = 999; 
+    
+    // Impact FX
+    this.cameras.main.shake(120, 0.015);
+    this.spawnShatterParticles(buddy);
     audio.playLaunch();
   }
 
@@ -564,7 +583,9 @@ export class GameScene extends Phaser.Scene {
     if (this.movesLeft <= 0) {
       this.time.delayedCall(1500, () => {
         if (this.buddies.some(b => b.state !== 'escaping')) {
-          this.showMsg('😅 Out of moves! Tap 🔄 to restart!');
+          this.triggerHaptic([100, 50, 100]);
+          this.scene.pause();
+          this.scene.launch('Defeat', { world: this.worldIndex, level: this.levelIndex, isDaily: this.isDaily });
         }
       });
     }
@@ -576,7 +597,7 @@ export class GameScene extends Phaser.Scene {
     this.triggerHaptic([40, 60, 40]);
     audio.playExplosion();
     this.spawnBoomParticles(bomb.sx, bomb.sy);
-    this.startEscape(bomb, bomb.dir);
+    this.startEscape(bomb);
 
     // Adjacent blocks
     this.buddies
@@ -586,8 +607,8 @@ export class GameScene extends Phaser.Scene {
         this.time.delayedCall(80 + i * 70, () => {
           if (b.state === 'idle' || b.state === 'locked') {
             b.state = 'idle';
-            const freeDir = this.findFreeDirection(b) ?? b.dir;
-            this.startEscape(b, freeDir);
+
+            this.startEscape(b);
             if (b.type === 'key' && b.targetChestId) {
               const chest = this.buddies.find(c => c.id === b.targetChestId);
               if (chest) { chest.state = 'idle'; this.spawnUnlockParticles(chest.sx, chest.sy); }
@@ -640,11 +661,16 @@ export class GameScene extends Phaser.Scene {
       if (b.type === 'rainbow') b.rainbowHue = (b.rainbowHue + dt * 0.4) % 1;
 
       if (b.state === 'escaping') {
-        b.sx += b.escapeVx * dt * 60;
-        b.sy += b.escapeVy * dt * 60;
-        const base = gridToScreen(b.x, b.y, b.z, this.rotState);
-        if (Math.hypot(b.sx - base.x, b.sy - base.y) > 1200) {
+        if (b.animT >= 999) {
           escaped.push(b);
+        } else {
+          // fallback if any other code sets state to escaping normally
+          b.sx += b.escapeVx * dt * 60;
+          b.sy += b.escapeVy * dt * 60;
+          const base = gridToScreen(b.x, b.y, b.z, this.rotState);
+          if (Math.hypot(b.sx - base.x, b.sy - base.y) > 1200) {
+            escaped.push(b);
+          }
         }
       } else if (b.state === 'anticipation') {
         const dur = 0.15;
@@ -654,8 +680,7 @@ export class GameScene extends Phaser.Scene {
         b.sy = base.y + b.bumpDy * ratio;
 
         if (b.animT >= dur) {
-          const escDir = b.escapeGridDir || b.dir;
-          this.startEscape(b, escDir);
+          this.startEscape(b);
           if (b.type === 'rotator') {
             this.triggerRotatorEffect(b);
           }
@@ -727,6 +752,7 @@ export class GameScene extends Phaser.Scene {
     // Remove escaped blocks & check victory
     if (escaped.length > 0) {
       this.buddies = this.buddies.filter(b => !escaped.includes(b));
+      this.applyGravity();
       this.checkVictory();
     }
 
@@ -735,6 +761,40 @@ export class GameScene extends Phaser.Scene {
 
     // Render
     this.draw();
+  }
+
+  private applyGravity() {
+    let changed = true;
+    while (changed) {
+      changed = false;
+      // Sort lowest (smallest Y) to highest so we process from bottom up
+      const sorted = [...this.buddies].sort((a, b) => a.y - b.y);
+      
+      for (const b of sorted) {
+        if (b.state === 'escaping') continue;
+        
+        const floorY = this.floorHeights.get(`${b.x},${b.z}`) ?? 0;
+        if (b.y <= floorY) continue; // Already at or below the original floor level
+
+        // Check if space below is empty
+        const below = this.buddies.find(other => 
+          other !== b && other.x === b.x && other.y === b.y - 1 && other.z === b.z && other.state !== 'escaping'
+        );
+
+        if (!below) {
+          b.y -= 1;
+          changed = true;
+          
+          // Trigger visual fall bounce
+          b.state = 'bump';
+          b.animT = 0;
+          b.bumpDx = 0;
+          b.bumpDy = 15; // Visual drop bounce
+          
+          this.triggerHaptic(20);
+        }
+      }
+    }
   }
 
   // ═══════════════════════════════════════════════════════════════════════
@@ -1043,7 +1103,7 @@ export class GameScene extends Phaser.Scene {
       emitting: false
     }).setDepth(8);
 
-    // Explosion emitter
+    // Boom emitter
     this.boomEmitter = this.add.particles(0, 0, 'block_particle', {
       speed: { min: 80, max: 280 },
       scale: { start: 1.2, end: 0 },
@@ -1052,7 +1112,20 @@ export class GameScene extends Phaser.Scene {
       angle: { min: 0, max: 360 },
       blendMode: 'ADD',
       emitting: false
-    }).setDepth(9);
+    }).setDepth(2001);
+
+    // Shatter emitter (Geometric fragments)
+    this.shatterEmitter = this.add.particles(0, 0, 'block_particle', {
+      speed: { min: 150, max: 400 },
+      scale: { start: 1.5, end: 0 },
+      alpha: { start: 1, end: 0 },
+      lifespan: { min: 400, max: 800 },
+      angle: { min: 0, max: 360 },
+      rotate: { min: 0, max: 720 },
+      blendMode: 'ADD',
+      gravityY: 400,
+      emitting: false
+    }).setDepth(2002);
 
     // Confetti emitter
     this.confettiEmitter = this.add.particles(0, 0, 'star_particle', {
@@ -1072,11 +1145,13 @@ export class GameScene extends Phaser.Scene {
     };
   }
 
-  private spawnTrailParticles(b: BuddyBlock) {
+
+  private spawnShatterParticles(b: BuddyBlock) {
     const { x, y } = this.getScreenPos(b);
     const col = b.type === 'rainbow' ? hslToInt(b.rainbowHue * 360, 100, 80) : b.palGlow;
-    this.trailEmitter.setParticleTint(col);
-    this.trailEmitter.explode(18, x, y);
+    const col2 = b.palTop || col;
+    this.shatterEmitter.setParticleTint([col, col2, 0xffffff]);
+    this.shatterEmitter.explode(35, x, y);
   }
 
   private spawnBoomParticles(bsx: number, bsy: number) {
@@ -1312,75 +1387,5 @@ export class GameScene extends Phaser.Scene {
     });
   }
 
-  private drawBackground(W: number, H: number) {
-    const g = this.bgGfx;
-    g.clear();
-    
-    // Cyberpunk gradient background
-    const steps = 24;
-    for (let i = 0; i < steps; i++) {
-      const t = i / steps;
-      // Interpolate from deep dark black/purple to slightly lighter purple at the bottom
-      const r = Math.round(5 + t * 12);
-      const gv = 0;
-      const b = Math.round(12 + t * 24);
-      const color = (r << 16) | (gv << 8) | b;
-      g.fillStyle(color, 1);
-      g.fillRect(0, i * (H / steps), W, H / steps + 1);
-    }
-    
-    // Perspective grid floor (retro neon grid)
-    const horizonY = H * 0.42;
-    const vanishingX = W / 2;
-    
-    // Grid lines color based on world index (magenta, cyan, or purple)
-    const gridHues: Record<number, number> = { 1: 330, 2: 175, 3: 270, 4: 195, 5: 210, 6: 15 };
-    const wHue = gridHues[this.worldIndex] ?? 330;
-    const gridCol = hslToInt(wHue, 95, 60);
 
-    // Converging lines
-    g.lineStyle(1.5, gridCol, 0.14);
-    const lineCount = 14;
-    for (let i = 0; i <= lineCount; i++) {
-      const t = i / lineCount;
-      const startX = W * (t * 2.5 - 0.75); // wide bottom span
-      g.beginPath();
-      g.moveTo(vanishingX, horizonY);
-      g.lineTo(startX, H);
-      g.strokePath();
-    }
-    
-    // Horizontal lines with exponential spacing
-    const horizCount = 10;
-    for (let i = 0; i < horizCount; i++) {
-      const t = i / horizCount;
-      const y = horizonY + Math.pow(t, 2) * (H - horizonY);
-      const span = (y - horizonY) / (H - horizonY);
-      const leftX = vanishingX + (-0.75) * span * W * 2.5;
-      const rightX = vanishingX + (1.75) * span * W * 2.5;
-      
-      g.lineStyle(1.5, gridCol, 0.04 + t * 0.16);
-      g.beginPath();
-      g.moveTo(leftX, y);
-      g.lineTo(rightX, y);
-      g.strokePath();
-    }
-
-    // Grid dots (stars)
-    const grid = 50;
-    for (let x = 0; x < W + grid; x += grid) {
-      for (let y = 0; y < H + grid; y += grid) {
-        const distToCenter = Math.hypot(x - W / 2, y - H / 2);
-        const opacity = Math.max(0.02, 0.14 - (distToCenter / Math.max(W, H)) * 0.12);
-        g.fillStyle(0xffffff, opacity);
-        g.fillCircle(x, y, 1.2);
-      }
-    }
-    
-    // Dynamic world center glow
-    const worldHues: Record<number, number> = { 1: 330, 2: 165, 3: 270, 4: 175, 5: 195, 6: 10 };
-    const hue = worldHues[this.worldIndex] ?? 330;
-    g.fillStyle(hslToInt(hue, 95, 12), 0.70);
-    g.fillCircle(W / 2, H / 2, Math.min(W, H) * 0.72);
-  }
 }

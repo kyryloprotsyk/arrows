@@ -1,6 +1,6 @@
 /* MenuScene.ts — Animated splash screen with floating isometric buddy blocks */
 import Phaser from 'phaser';
-import { TILE_W, TILE_H, BLOCK_H, getBlockPalette, drawHat, drawIsoCube, hslToInt } from '../utils/IsoHelper';
+import { TILE_W, TILE_H, BLOCK_H, getBlockPalette, drawHat, drawIsoCube, drawCartoonCosmicBg, createCosmicEffects } from '../utils/IsoHelper';
 import { GameData } from '../utils/GameData';
 import { audio } from '../audio';
 
@@ -34,10 +34,10 @@ export class MenuScene extends Phaser.Scene {
 
     // --- Background gradient via graphics ---
     this.bgGfx = this.add.graphics();
-    this.drawBg(W, H);
+    drawCartoonCosmicBg(this.bgGfx, W, H, 280);
 
     // --- Animated star field ---
-    this.createStarField(W, H);
+    createCosmicEffects(this, W, H, 280);
 
     // --- Floating isometric demo blocks ---
     this.blockGfx = this.add.graphics();
@@ -104,7 +104,11 @@ export class MenuScene extends Phaser.Scene {
     }).setOrigin(0.5);
 
     topBar.add([topBarBg, topBarTxt]);
-    topBar.setSize(topW, topH).setInteractive({ useHandCursor: true });
+    topBar.setSize(topW, topH).setInteractive({
+      hitArea: new Phaser.Geom.Rectangle(-topW / 2, -topH / 2, topW, topH),
+      hitAreaCallback: Phaser.Geom.Rectangle.Contains,
+      useHandCursor: true
+    });
     topBar.on('pointerdown', () => {
       audio.playTap();
       this.cameras.main.fadeOut(280, 0, 0, 20);
@@ -202,38 +206,7 @@ export class MenuScene extends Phaser.Scene {
     });
   }
 
-  private drawBg(W: number, H: number) {
-    const g = this.bgGfx;
-    g.clear();
-    // Synthwave radial gradient
-    const steps = 16;
-    for (let i = steps; i >= 0; i--) {
-      const t = i / steps;
-      // Outer deep purple, Inner vibrant hot magenta/purple
-      const h = 280 + (1 - t) * 60; // HSL Hue shift from purple to pink/magenta
-      const col = hslToInt(h, 95, 12 + t * 20);
-      const size = (1 - t) * Math.max(W, H) * 1.5;
-      g.fillStyle(col, 0.08 + t * 0.08);
-      g.fillCircle(W / 2, H / 2, size);
-    }
-  }
 
-  private createStarField(W: number, H: number) {
-    const gfx = this.add.graphics();
-    gfx.fillStyle(0xffffff, 0.6);
-    for (let i = 0; i < 120; i++) {
-      const x = Math.random() * W;
-      const y = Math.random() * H;
-      const r = Math.random() * 1.5 + 0.3;
-      gfx.fillCircle(x, y, r);
-    }
-
-    // Twinkle effect: fade in/out random stars
-    this.tweens.add({
-      targets: gfx, alpha: { from: 0.6, to: 0.9 },
-      duration: 2000, yoyo: true, repeat: -1, ease: 'Sine.InOut'
-    });
-  }
 
   private spawnFloatingBlocks(W: number, H: number) {
     const skins = ['none', 'none', 'wizard', 'crown', 'cat', 'tophat', 'chef', 'propeller', 'rainbow'];
@@ -286,7 +259,11 @@ export class MenuScene extends Phaser.Scene {
     container.add([g, text]);
 
     // Set container interactive
-    container.setSize(w, h).setInteractive(new Phaser.Geom.Rectangle(-w / 2, -h / 2, w, h), Phaser.Geom.Rectangle.Contains);
+    container.setSize(w, h).setInteractive({
+      hitArea: new Phaser.Geom.Rectangle(-w / 2, -h / 2, w, h),
+      hitAreaCallback: Phaser.Geom.Rectangle.Contains,
+      useHandCursor: true
+    });
 
     container.on('pointerover', () => {
       draw(true);
