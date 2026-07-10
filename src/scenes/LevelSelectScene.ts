@@ -21,6 +21,9 @@ interface LevelNode {
   scalePerp: number;
   angle: number;
   bumpDy: number;
+  numTxt?: Phaser.GameObjects.Text;
+  starTxts?: Phaser.GameObjects.Text[];
+  lockTxt?: Phaser.GameObjects.Text;
 }
 
 export class LevelSelectScene extends Phaser.Scene {
@@ -55,7 +58,7 @@ export class LevelSelectScene extends Phaser.Scene {
 
     // Title
     this.add.text(W / 2, H * 0.08, `World ${this.worldIndex} Levels`, {
-      fontFamily: 'Fredoka', fontSize: Math.min(W * 0.07, 36) + 'px', color: '#ffffff',
+      fontFamily: 'Orbitron', fontSize: Math.min(W * 0.07, 36) + 'px', color: '#ffffff',
       shadow: { offsetX: 0, offsetY: 4, color: '#6600ff', blur: 16, fill: true }
     }).setOrigin(0.5);
 
@@ -71,18 +74,49 @@ export class LevelSelectScene extends Phaser.Scene {
       { x: W * 0.68, y: H * 0.22 }
     ];
 
-    // Build level nodes
+    // Build level nodes AND create persistent text overlays (created once, repositioned each frame)
     this.nodes = pts.map((pt, i) => {
       const levelIdx = i + 1;
       const unlocked = levelIdx <= savedLevel;
       const stars = GameData.starsFor(this.worldIndex, levelIdx);
-      return {
+
+      const node: LevelNode = {
         levelIdx,
         x: pt.x, y: pt.y, cy: pt.y,
         unlocked, stars,
         state: 'idle', animT: 0,
         scalePara: 1, scalePerp: 1, angle: 0, bumpDy: 0
-      } as LevelNode;
+      };
+
+      if (unlocked) {
+        // Level number badge — no shadow, clean neon text
+        node.numTxt = this.add.text(pt.x, pt.y, `${levelIdx}`, {
+          fontFamily: 'Orbitron',
+          fontSize: '18px',
+          fontStyle: 'bold',
+          color: '#ffffff',
+          stroke: '#000000',
+          strokeThickness: 3
+        }).setOrigin(0.5).setDepth(22);
+
+        // Star row — created once, repositioned
+        node.starTxts = [];
+        for (let st = 0; st < 3; st++) {
+          const starChar = stars > st ? '⭐' : '○';
+          const starCol  = stars > st ? '#ffe45e' : '#554466';
+          const stTxt = this.add.text(pt.x + (st - 1) * 22, pt.y, starChar, {
+            fontFamily: 'Orbitron', fontSize: '13px', color: starCol
+          }).setOrigin(0.5).setDepth(21);
+          node.starTxts.push(stTxt);
+        }
+      } else {
+        // Lock icon — created once
+        node.lockTxt = this.add.text(pt.x, pt.y, '🔒', {
+          fontFamily: 'Orbitron', fontSize: '16px'
+        }).setOrigin(0.5).setDepth(22);
+      }
+
+      return node;
     });
 
     // Create interactive click zones for level nodes
@@ -96,16 +130,17 @@ export class LevelSelectScene extends Phaser.Scene {
     });
 
     // Back Button
-    const backBtn = this.add.text(40, 35, '← Worlds', {
-      fontFamily: 'Fredoka', fontSize: '20px', color: '#9b72ff'
-    }).setInteractive({ useHandCursor: true });
+    const backBtn = this.add.text(45, 35, '◀ Worlds', {
+      fontFamily: 'Orbitron', fontSize: '18px', color: '#9b72ff',
+      backgroundColor: '#1a0033aa', padding: { x: 12, y: 8 }
+    }).setOrigin(0.5).setInteractive({ useHandCursor: true });
     backBtn.on('pointerdown', () => {
       audio.playTap();
       this.cameras.main.fadeOut(300, 10, 0, 26);
       this.time.delayedCall(320, () => this.scene.start('WorldSelect'));
     });
-    backBtn.on('pointerover', () => backBtn.setColor('#ff85c1'));
-    backBtn.on('pointerout', () => backBtn.setColor('#9b72ff'));
+    backBtn.on('pointerover', () => { backBtn.setColor('#ff85c1'); backBtn.setBackgroundColor('#2a0055aa'); });
+    backBtn.on('pointerout', () => { backBtn.setColor('#9b72ff'); backBtn.setBackgroundColor('#1a0033aa'); });
 
     // Fade in
     this.cameras.main.fadeIn(400, 10, 0, 26);
@@ -234,27 +269,35 @@ export class LevelSelectScene extends Phaser.Scene {
       // Render block
       drawIsoCube(g, cx, cy, topCol, leftCol, rightCol, glowCol, node.unlocked ? 0.65 : 0.25, transformer);
 
-      // Draw overlays (Level number, Lock symbol, Stars)
+      // ── Overlay: reposition pre-created text objects ───────────────
       if (node.unlocked) {
-        // Draw Number on top face
-        const topCenter = tPt(cx, cy - th * 0.45);
-        this.addTextOverlay(`${node.levelIdx}`, topCenter.x, topCenter.y, '#ffffff');
+        const topCenter = tPt(cx, cy - th * 0.55);
+        const isFlyHide = node.state === 'launch' && node.animT > 0.15;
+        const overlayAlpha = isFlyHide ? 0 : 1;
 
-        // Draw Stars below block
-        const starY = cy + bh + 16;
-        for (let st = 0; st < 3; st++) {
-          const sx = cx + (st - 1) * 22;
-          const starChar = node.stars > st ? '⭐' : '○';
-          const starCol = node.stars > st ? '#ffe45e' : '#665588';
-          const starTxt = this.addTextOverlay(starChar, sx, starY, starCol, '14px');
-          // Clean up text object after single frames to avoid leak
-          this.time.delayedCall(16, () => starTxt.destroy());
+        // Draw glowing badge disc on the top face
+        if (!isFlyHide) {
+          const badgeR = 13 * Math.min(scalePara, scalePerp);
+          const badgeCol = hslToInt(wHue, 100, 45);
+          g.fillStyle(badgeCol, 0.9);
+          g.fillCircle(topCenter.x, topCenter.y, badgeR);
+          g.lineStyle(2, 0xffffff, 0.75);
+          g.strokeCircle(topCenter.x, topCenter.y, badgeR);
         }
+
+        if (node.numTxt) {
+          node.numTxt.setPosition(topCenter.x, topCenter.y).setAlpha(overlayAlpha);
+        }
+
+        const starY = cy + bh + 18;
+        node.starTxts?.forEach((stTxt, st) => {
+          stTxt.setPosition(cx + (st - 1) * 22, starY).setAlpha(overlayAlpha);
+        });
       } else {
-        // Draw Lock symbol on top face
-        const topCenter = tPt(cx, cy - th * 0.45);
-        const lockTxt = this.addTextOverlay('🔒', topCenter.x, topCenter.y, '#ffffff', '16px');
-        this.time.delayedCall(16, () => lockTxt.destroy());
+        const topCenter = tPt(cx, cy - th * 0.55);
+        if (node.lockTxt) {
+          node.lockTxt.setPosition(topCenter.x, topCenter.y);
+        }
       }
 
       // Draw active skin hat if unlocked
@@ -262,13 +305,6 @@ export class LevelSelectScene extends Phaser.Scene {
         drawHat(g, cx, cy, tw, th, this.activeSkin, this.time.now, transformer);
       }
     });
-  }
-
-  private addTextOverlay(txt: string, x: number, y: number, color: string, size = '20px') {
-    return this.add.text(x, y, txt, {
-      fontFamily: 'Fredoka', fontSize: size, color, align: 'center',
-      shadow: { offsetX: 0, offsetY: 2, color: '#000000', blur: 6, fill: true }
-    }).setOrigin(0.5).setDepth(20);
   }
 
   private drawPath() {

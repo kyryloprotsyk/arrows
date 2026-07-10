@@ -60,22 +60,22 @@ export class MenuScene extends Phaser.Scene {
 
     // --- Game Logo Title ---
     const titleFontSize = Math.min(W * 0.1, 68);
-    const title1 = this.add.text(W / 2, H * 0.15, '🏹 ARROW', {
-      fontFamily: 'Fredoka', fontSize: `${titleFontSize}px`,
+    const title1 = this.add.text(W / 2, H * 0.145, '🏹 ARROW', {
+      fontFamily: 'Orbitron', fontSize: `${titleFontSize}px`,
       color: '#ff85c1',
       stroke: '#ffffff', strokeThickness: 5,
       shadow: { offsetX: 0, offsetY: 6, color: '#ff0088', blur: 25, fill: true }
     }).setOrigin(0.5).setAlpha(0);
 
-    const title2 = this.add.text(W / 2, H * 0.23, 'BUDDIES 3D', {
-      fontFamily: 'Fredoka', fontSize: `${titleFontSize * 0.85}px`,
+    const title2 = this.add.text(W / 2, H * 0.225, 'BUDDIES 3D', {
+      fontFamily: 'Orbitron', fontSize: `${titleFontSize * 0.85}px`,
       color: '#ffe45e',
       stroke: '#ffffff', strokeThickness: 4,
       shadow: { offsetX: 0, offsetY: 6, color: '#ffa500', blur: 20, fill: true }
     }).setOrigin(0.5).setAlpha(0);
 
     const sub = this.add.text(W / 2, H * 0.30, 'Neon Escape Puzzle!', {
-      fontFamily: 'Fredoka', fontSize: Math.min(W * 0.045, 22) + 'px',
+      fontFamily: 'Orbitron', fontSize: Math.min(W * 0.045, 22) + 'px',
       color: '#9b72ff'
     }).setOrigin(0.5).setAlpha(0);
 
@@ -100,15 +100,12 @@ export class MenuScene extends Phaser.Scene {
     const userName = GameData.username.get();
     const userLvl = GameData.playerXP.getLevel();
     const topBarTxt = this.add.text(0, 0, `${userEmo} ${userName} • Lvl ${userLvl} ⭐`, {
-      fontFamily: 'Fredoka', fontSize: Math.min(topW * 0.065, 16) + 'px', color: '#00ffcc', fontStyle: 'bold'
+      fontFamily: 'Orbitron', fontSize: Math.min(topW * 0.065, 16) + 'px', color: '#00ffcc', fontStyle: 'bold'
     }).setOrigin(0.5);
 
     topBar.add([topBarBg, topBarTxt]);
-    topBar.setSize(topW, topH).setInteractive({
-      hitArea: new Phaser.Geom.Rectangle(-topW / 2, -topH / 2, topW, topH),
-      hitAreaCallback: Phaser.Geom.Rectangle.Contains,
-      useHandCursor: true
-    });
+    topBar.setInteractive(new Phaser.Geom.Rectangle(-topW / 2, -topH / 2, topW, topH), Phaser.Geom.Rectangle.Contains);
+    topBar.input!.cursor = 'pointer';
     topBar.on('pointerdown', () => {
       audio.playTap();
       this.cameras.main.fadeOut(280, 0, 0, 20);
@@ -129,7 +126,7 @@ export class MenuScene extends Phaser.Scene {
 
     // Coin display
     const coinText = this.add.text(W / 2, coinY, `🪙 ${GameData.coins.get()} Coins`, {
-      fontFamily: 'Fredoka', fontSize: '22px', color: '#ffe45e'
+      fontFamily: 'Orbitron', fontSize: '22px', color: '#ffe45e'
     }).setOrigin(0.5).setAlpha(0);
     this.tweens.add({ targets: coinText, alpha: 1, delay: 900, duration: 400 });
 
@@ -138,7 +135,7 @@ export class MenuScene extends Phaser.Scene {
 
     // Info
     this.add.text(W / 2, H * 0.965, '🔄 Drag to rotate  •  👆 Tap to escape  •  💣 Bomb magic!', {
-      fontFamily: 'Fredoka', fontSize: Math.min(W * 0.032, 14) + 'px', color: '#665588'
+      fontFamily: 'Orbitron', fontSize: Math.min(W * 0.032, 14) + 'px', color: '#665588'
     }).setOrigin(0.5);
 
     // Button actions
@@ -251,19 +248,25 @@ export class MenuScene extends Phaser.Scene {
 
     draw(false);
 
+    // Dynamic font size: fits text inside button (38% of height, capped by width)
+    const labelLen  = label.replace(/\p{Emoji}/gu, '  ').length; // emoji ≈ 2 chars wide
+    const maxByH    = Math.round(h * 0.42);
+    const maxByW    = Math.round(w / Math.max(labelLen * 0.52, 1));
+    const fontSize  = Math.min(maxByH, maxByW, 22);
+
     const text = this.add.text(0, 0, label, {
-      fontFamily: 'Fredoka', fontSize: '22px', color: '#ffffff',
-      stroke: '#000000', strokeThickness: 2
+      fontFamily: 'Orbitron',
+      fontSize: `${fontSize}px`,
+      color: '#ffffff',
+      stroke: '#000000', strokeThickness: 1.5,
+      align: 'center'
     }).setOrigin(0.5);
 
     container.add([g, text]);
 
     // Set container interactive
-    container.setSize(w, h).setInteractive({
-      hitArea: new Phaser.Geom.Rectangle(-w / 2, -h / 2, w, h),
-      hitAreaCallback: Phaser.Geom.Rectangle.Contains,
-      useHandCursor: true
-    });
+    container.setInteractive(new Phaser.Geom.Rectangle(-w / 2, -h / 2, w, h), Phaser.Geom.Rectangle.Contains);
+    container.input!.cursor = 'pointer';
 
     container.on('pointerover', () => {
       draw(true);

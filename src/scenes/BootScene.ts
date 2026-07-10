@@ -17,7 +17,7 @@ export class BootScene extends Phaser.Scene {
 
     const bar = this.add.graphics();
     this.add.text(W / 2, H * 0.42, 'ARROW BUDDIES 3D', {
-      fontFamily: 'Fredoka',
+      fontFamily: 'Orbitron',
       fontSize: Math.min(W * 0.08, 52) + 'px',
       color: '#ff85c1',
       stroke: '#ffffff',
@@ -26,7 +26,7 @@ export class BootScene extends Phaser.Scene {
     }).setOrigin(0.5);
 
     const sub = this.add.text(W / 2, H * 0.5 + 30, 'Loading...', {
-      fontFamily: 'Fredoka',
+      fontFamily: 'Orbitron',
       fontSize: '20px',
       color: '#9b72ff'
     }).setOrigin(0.5);

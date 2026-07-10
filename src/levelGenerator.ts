@@ -1,7 +1,7 @@
 /* levelGenerator.ts — Solvable 3D puzzle generator (no Three.js dependency) */
 
 export interface Vec3 { x: number; y: number; z: number; }
-export type BlockType = 'normal' | 'bomb' | 'key' | 'chest' | 'rainbow' | 'rotator';
+export type BlockType = 'normal' | 'bomb' | 'key' | 'chest' | 'rainbow' | 'rotator' | 'portal';
 
 export interface BlockConfig {
   id: string;
@@ -17,6 +17,7 @@ export interface LevelData {
   worldName: string;
   blocks: BlockConfig[];
   moveLimit: number;
+  par: number;
 }
 
 // --- Vector helpers ---
@@ -55,12 +56,15 @@ class LevelGenerator {
     else if (worldIndex >= 6) multiplier = 1.15;
 
     const moveLimit = Math.max(12, Math.round(blocks.length * multiplier + 4));
+    // Dynamic par target is tight (approx. 70% of blocks count, representing a smart puzzle solution)
+    const par = Math.max(4, Math.round(blocks.length * 0.70));
 
     return {
       worldIndex, levelIndex,
       worldName: this.getWorldName(worldIndex),
       blocks,
-      moveLimit
+      moveLimit,
+      par
     };
   }
 
@@ -492,6 +496,7 @@ class LevelGenerator {
     let keyChestPairs = 0;
     let rotatorCount = 0;
     let rainbowPct = 0;
+    let portalPairs = 0;
 
     if (w === 2) {
       bombCount = l === 1 ? 1 : l < 4 ? 2 : 3;
@@ -502,21 +507,25 @@ class LevelGenerator {
       rotatorCount = l < 3 ? 1 : 2;
       keyChestPairs = l >= 3 ? 1 : 0;
       rainbowPct = 0.15;
+      portalPairs = l >= 2 ? 1 : 0;
     } else if (w === 4) {
       bombCount = l < 3 ? 2 : 4;
       rotatorCount = l < 3 ? 2 : 3;
       keyChestPairs = l >= 3 ? (l === 5 ? 2 : 1) : 0;
       rainbowPct = 0.15;
+      portalPairs = l >= 2 ? 1 : 0;
     } else if (w === 5) {
       bombCount = l < 3 ? 3 : 4;
       rotatorCount = l < 3 ? 2 : 4;
       keyChestPairs = l >= 3 ? (l >= 4 ? 2 : 1) : 0;
       rainbowPct = 0.20;
+      portalPairs = l >= 2 ? (l >= 4 ? 2 : 1) : 0;
     } else if (w >= 6) {
       bombCount = l < 3 ? 3 : 5;
       rotatorCount = l < 3 ? 3 : 5;
       keyChestPairs = l >= 3 ? (l === 5 ? 3 : 2) : 0;
       rainbowPct = 0.20;
+      portalPairs = 2;
     }
 
     // 1. Inject Bombs
@@ -549,6 +558,16 @@ class LevelGenerator {
           si++;
         }
       }
+    }
+
+    // 5. Inject Portal Pairs
+    for (let i = 0; i < portalPairs && si + 1 < shuffle.length; i++) {
+      const portalA = shuffle[si]; si++;
+      const portalB = shuffle[si]; si++;
+      portalA.type = 'portal';
+      portalB.type = 'portal';
+      portalA.targetChestId = `portal_group_${i}`;
+      portalB.targetChestId = `portal_group_${i}`;
     }
   }
 }

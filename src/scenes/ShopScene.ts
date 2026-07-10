@@ -41,8 +41,8 @@ export class ShopScene extends Phaser.Scene {
     this.addStarBg(W, H);
 
     // Title
-    this.add.text(W / 2, H * 0.06, '🎩 Skins Shop', {
-      fontFamily: 'Fredoka',
+    this.add.text(W / 2, H * 0.06, 'SKINS SHOP', {
+      fontFamily: 'Orbitron',
       fontSize: Math.min(W * 0.09, 44) + 'px',
       color: '#ffe45e',
       shadow: { offsetX: 0, offsetY: 5, color: '#ff8800', blur: 20, fill: true }
@@ -50,30 +50,31 @@ export class ShopScene extends Phaser.Scene {
 
     // Coin display
     this.coinText = this.add.text(W / 2, H * 0.13, `🪙 ${GameData.coins.get()} Coins`, {
-      fontFamily: 'Fredoka', fontSize: '22px', color: '#ffe45e'
+      fontFamily: 'Orbitron', fontSize: '20px', color: '#ffe45e', fontStyle: 'bold'
     }).setOrigin(0.5);
 
     // Gacha machine (left side on wide screens, top half on mobile)
     const machineX = W > 600 ? W * 0.25 : W / 2;
-    const machineY = W > 600 ? H * 0.45 : H * 0.38;
+    const machineY = W > 600 ? H * 0.45 : H * 0.28;
     this.createGachaMachine(machineX, machineY, W, H);
 
     // Skin wardrobe grid
     const gridX = W > 600 ? W * 0.58 : W / 2;
-    const gridY = W > 600 ? H * 0.28 : H * 0.65;
+    const gridY = W > 600 ? H * 0.28 : H * 0.58;
     this.createWardrobeGrid(gridX, gridY, W, H);
 
     // Back button
-    const back = this.add.text(40, 35, '← Back', {
-      fontFamily: 'Fredoka', fontSize: '20px', color: '#9b72ff'
-    }).setInteractive({ useHandCursor: true });
+    const back = this.add.text(45, 35, '◀ Back', {
+      fontFamily: 'Orbitron', fontSize: '18px', color: '#9b72ff',
+      backgroundColor: '#1a0033aa', padding: { x: 12, y: 8 }
+    }).setOrigin(0.5).setInteractive({ useHandCursor: true });
     back.on('pointerdown', () => {
       audio.playTap();
       this.cameras.main.fadeOut(300, 10, 0, 26);
       this.time.delayedCall(320, () => this.scene.start('Menu'));
     });
-    back.on('pointerover', () => back.setColor('#ff85c1'));
-    back.on('pointerout',  () => back.setColor('#9b72ff'));
+    back.on('pointerover', () => { back.setColor('#ff85c1'); back.setBackgroundColor('#2a0055aa'); });
+    back.on('pointerout',  () => { back.setColor('#9b72ff'); back.setBackgroundColor('#1a0033aa'); });
   }
 
   private createGachaMachine(cx: number, cy: number, W: number, _H: number) {
@@ -113,7 +114,7 @@ export class ShopScene extends Phaser.Scene {
 
     // "GACHA" label
     this.add.text(cx, cy + machineH * 0.13, 'GACHA!', {
-      fontFamily: 'Fredoka', fontSize: '16px', color: '#ffffff'
+      fontFamily: 'Orbitron', fontSize: '15px', color: '#ffffff', fontStyle: 'bold'
     }).setOrigin(0.5).setDepth(3);
 
     // Spinning capsule inside glass
@@ -124,24 +125,26 @@ export class ShopScene extends Phaser.Scene {
     const spinBtnY = cy + machineH / 2 + 28;
     const spinBtnW = machineW * 0.95;
     const spinBtn  = this.add.graphics().setDepth(4);
+    const spinBtnH = 48;
+    const spinFontSize = Math.min(Math.round(spinBtnH * 0.32), Math.round(spinBtnW / Math.max('Spin! 🎰  🪙100'.length * 0.48, 1)), 16);
     const spinTxt_ = this.add.text(cx, spinBtnY, `Spin! 🎰\n🪙${GACHA_COST}`, {
-      fontFamily: 'Fredoka', fontSize: '16px', color: '#ffffff', align: 'center'
+      fontFamily: 'Orbitron', fontSize: `${spinFontSize}px`, color: '#ffffff', align: 'center', fontStyle: 'bold'
     }).setOrigin(0.5).setDepth(5);
     void spinTxt_;
 
     const drawSpinBtn = (hover: boolean) => {
       spinBtn.clear();
       spinBtn.fillStyle(0xff6eb4, hover ? 1 : 0.8);
-      spinBtn.fillRoundedRect(cx - spinBtnW / 2, spinBtnY - 24, spinBtnW, 48, 14);
+      spinBtn.fillRoundedRect(cx - spinBtnW / 2, spinBtnY - spinBtnH / 2, spinBtnW, spinBtnH, 14);
       for (let p = 0; p < 3; p++) {
         spinBtn.lineStyle([5, 3, 1.5][p], 0xff0088, [0.1, 0.25, 0.6][p]);
-        spinBtn.strokeRoundedRect(cx - spinBtnW / 2, spinBtnY - 24, spinBtnW, 48, 14);
+        spinBtn.strokeRoundedRect(cx - spinBtnW / 2, spinBtnY - spinBtnH / 2, spinBtnW, spinBtnH, 14);
       }
     };
     drawSpinBtn(false);
 
     spinBtn.setInteractive(
-      new Phaser.Geom.Rectangle(cx - spinBtnW / 2, spinBtnY - 24, spinBtnW, 48),
+      new Phaser.Geom.Rectangle(cx - spinBtnW / 2, spinBtnY - spinBtnH / 2, spinBtnW, spinBtnH),
       Phaser.Geom.Rectangle.Contains
     );
     spinBtn.on('pointerover', () => drawSpinBtn(true));
@@ -159,25 +162,27 @@ export class ShopScene extends Phaser.Scene {
 
     // Free Spin Ad Button
     const adSpinY = spinBtnY + 54;
+    const adSpinH = 36;
+    const adFontSize = Math.min(Math.round(adSpinH * 0.38), Math.round(spinBtnW / Math.max('🎬 Watch Ad Free Spin!'.length * 0.5, 1)), 13);
     const adSpinBtn = this.add.graphics().setDepth(4);
     const adSpinTxt = this.add.text(cx, adSpinY, `🎬 Watch Ad Free Spin!`, {
-      fontFamily: 'Fredoka', fontSize: '13px', color: '#0a001a', fontStyle: 'bold'
+      fontFamily: 'Orbitron', fontSize: `${adFontSize}px`, color: '#0a001a', fontStyle: 'bold', align: 'center'
     }).setOrigin(0.5).setDepth(5);
     void adSpinTxt;
 
     const drawAdSpin = (hover: boolean) => {
       adSpinBtn.clear();
       adSpinBtn.fillStyle(0x00ffcc, hover ? 1 : 0.85);
-      adSpinBtn.fillRoundedRect(cx - spinBtnW / 2, adSpinY - 18, spinBtnW, 36, 12);
+      adSpinBtn.fillRoundedRect(cx - spinBtnW / 2, adSpinY - adSpinH / 2, spinBtnW, adSpinH, 12);
       for (let p = 0; p < 3; p++) {
         adSpinBtn.lineStyle([4, 2, 1][p], 0x00aa88, [0.2, 0.4, 0.8][p]);
-        adSpinBtn.strokeRoundedRect(cx - spinBtnW / 2, adSpinY - 18, spinBtnW, 36, 12);
+        adSpinBtn.strokeRoundedRect(cx - spinBtnW / 2, adSpinY - adSpinH / 2, spinBtnW, adSpinH, 12);
       }
     };
     drawAdSpin(false);
 
     adSpinBtn.setInteractive(
-      new Phaser.Geom.Rectangle(cx - spinBtnW / 2, adSpinY - 18, spinBtnW, 36),
+      new Phaser.Geom.Rectangle(cx - spinBtnW / 2, adSpinY - adSpinH / 2, spinBtnW, adSpinH),
       Phaser.Geom.Rectangle.Contains
     );
     adSpinBtn.on('pointerover', () => drawAdSpin(true));
@@ -225,6 +230,24 @@ export class ShopScene extends Phaser.Scene {
     const cx_ = this.capsuleGfx.x || this.scale.width * 0.25;
     void cx_;
 
+    // Premium Effect: Dim screen
+    const overlay = this.add.graphics().setDepth(15);
+    overlay.fillStyle(0x000000, 0.7);
+    overlay.fillRect(0, 0, this.scale.width, this.scale.height);
+    overlay.setAlpha(0);
+    this.tweens.add({ targets: overlay, alpha: 1, duration: 400 });
+
+    // Premium Effect: Electricity arcs
+    const arcs = this.add.particles(cx_, capsuleY, 'star_particle', {
+      speed: { min: 100, max: 300 },
+      scale: { start: 0.5, end: 0 },
+      alpha: { start: 1, end: 0 },
+      lifespan: { min: 100, max: 200 },
+      tint: 0x00ffff,
+      frequency: 20,
+      blendMode: 'ADD'
+    }).setDepth(16);
+
     // Fast spin animation
     let t = 0;
     const spinSpeed = [0.05, 0.12, 0.3, 0.5];
@@ -237,8 +260,20 @@ export class ShopScene extends Phaser.Scene {
         if (spinTimer.repeatCount < 20) phase = 3;
         this.drawCapsule(this.capsuleGfx, this.scale.width > 600 ? this.scale.width * 0.25 : this.scale.width / 2,
           capsuleY, t, 0xff6eb4, 35);
+        
+        // Shake capsule
+        this.capsuleGfx.x = (Math.random() - 0.5) * 8;
+        this.capsuleGfx.y = (Math.random() - 0.5) * 8;
+        
         if (spinTimer.repeatCount === 0) {
-          this.revealGachaResult();
+          this.capsuleGfx.setPosition(0, 0);
+          arcs.destroy();
+          // Premium Effect: Flash before reveal
+          this.cameras.main.flash(200, 255, 255, 255, false);
+          this.time.delayedCall(200, () => {
+            overlay.destroy();
+            this.revealGachaResult();
+          });
         }
       },
       callbackScope: this
@@ -273,14 +308,15 @@ export class ShopScene extends Phaser.Scene {
     const rarityNames: Record<string, string> = { common: '✨ Common', rare: '💎 Rare', epic: '🔮 Epic!', legendary: '🌈 LEGENDARY!!' };
 
     const emojiTxt = this.add.text(W / 2, H / 2 - 60, skin.emoji, { fontSize: '72px' }).setOrigin(0.5).setDepth(31).setAlpha(0).setScale(0.2);
-    const nameTxt  = this.add.text(W / 2, H / 2 + 10, skin.name, { fontFamily: 'Fredoka', fontSize: '28px', color: '#ffffff' }).setOrigin(0.5).setDepth(31).setAlpha(0);
+    const nameTxt  = this.add.text(W / 2, H / 2 + 10, skin.name, { fontFamily: 'Orbitron', fontSize: '26px', color: '#ffffff', fontStyle: 'bold' }).setOrigin(0.5).setDepth(31).setAlpha(0);
     const rarityTxt = this.add.text(W / 2, H / 2 + 44, rarityNames[skin.rarity], {
-      fontFamily: 'Fredoka', fontSize: '20px',
-      color: `#${(RARITY_COLORS[skin.rarity] ?? 0xffffff).toString(16).padStart(6, '0')}`
+      fontFamily: 'Orbitron', fontSize: '18px',
+      color: `#${(RARITY_COLORS[skin.rarity] ?? 0xffffff).toString(16).padStart(6, '0')}`,
+      fontStyle: 'bold'
     }).setOrigin(0.5).setDepth(31).setAlpha(0);
 
     const closeTxt = this.add.text(W / 2, H / 2 + 90, 'Tap to close', {
-      fontFamily: 'Fredoka', fontSize: '16px', color: '#888888'
+      fontFamily: 'Orbitron', fontSize: '14px', color: '#888888'
     }).setOrigin(0.5).setDepth(31).setAlpha(0);
 
     // Animate reveal
@@ -356,8 +392,8 @@ export class ShopScene extends Phaser.Scene {
     }).setOrigin(0.5).setAlpha(0).setDepth(6);
 
     const label = this.add.text(cx, cy + size * 0.3, unlocked ? skin.name : '???', {
-      fontFamily: 'Fredoka', fontSize: `${Math.max(9, size * 0.16)}px`,
-      color: unlocked ? '#ffffff' : '#443344'
+      fontFamily: 'Orbitron', fontSize: `${Math.max(9, size * 0.16)}px`,
+      color: unlocked ? '#ffffff' : '#443344', fontStyle: 'bold'
     }).setOrigin(0.5).setAlpha(0).setDepth(6);
 
     if (unlocked) {
@@ -391,7 +427,7 @@ export class ShopScene extends Phaser.Scene {
   private showToast(msg: string) {
     const W = this.scale.width, H = this.scale.height;
     const t = this.add.text(W / 2, H * 0.9, msg, {
-      fontFamily: 'Fredoka', fontSize: '17px', color: '#ff8888',
+      fontFamily: 'Orbitron', fontSize: '15px', color: '#ff8888',
       backgroundColor: '#220022aa', padding: { x: 14, y: 8 }
     }).setOrigin(0.5).setDepth(50);
     this.tweens.add({ targets: t, alpha: 0, delay: 2500, duration: 500, onComplete: () => t.destroy() });

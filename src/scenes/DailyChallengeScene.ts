@@ -22,16 +22,16 @@ export class DailyChallengeScene extends Phaser.Scene {
     }
 
     // Header
-    this.add.text(W / 2, H * 0.08, '📅 Daily Challenge', {
-      fontFamily: 'Fredoka',
-      fontSize: Math.min(W * 0.085, 40) + 'px',
+    this.add.text(W / 2, H * 0.10, '📅 Daily Challenge', {
+      fontFamily: 'Orbitron',
+      fontSize: Math.min(W * 0.08, 36) + 'px',
       color: '#00ffcc',
       shadow: { offsetX: 0, offsetY: 4, color: '#008866', blur: 16, fill: true }
     }).setOrigin(0.5);
 
     const todayStr = new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' });
-    this.add.text(W / 2, H * 0.14, `Today: ${todayStr}`, {
-      fontFamily: 'Fredoka', fontSize: '18px', color: '#ccbbed'
+    this.add.text(W / 2, H * 0.16, `Today: ${todayStr}`, {
+      fontFamily: 'Orbitron', fontSize: '18px', color: '#ccbbed'
     }).setOrigin(0.5);
 
     // Current Streak Info
@@ -41,7 +41,7 @@ export class DailyChallengeScene extends Phaser.Scene {
     const alreadyPlayedToday = (lastPlayed === todayISO);
 
     this.add.text(W / 2, H * 0.22, `🔥 Current Streak: Day ${currentStreak} of 7`, {
-      fontFamily: 'Fredoka', fontSize: '22px', color: '#ffe45e'
+      fontFamily: 'Orbitron', fontSize: '18px', color: '#ffe45e', fontStyle: 'bold'
     }).setOrigin(0.5);
 
     // Draw 7-Day Timeline Card Grid
@@ -69,7 +69,7 @@ export class DailyChallengeScene extends Phaser.Scene {
 
       // Day label
       this.add.text(cx, gridY - cardH * 0.32, `Day ${day}`, {
-        fontFamily: 'Fredoka', fontSize: Math.min(cardW * 0.24, 14) + 'px',
+        fontFamily: 'Orbitron', fontSize: Math.min(cardW * 0.24, 14) + 'px',
         color: isCurrent ? '#00ffcc' : '#ffffff'
       }).setOrigin(0.5);
 
@@ -89,7 +89,7 @@ export class DailyChallengeScene extends Phaser.Scene {
       }).setOrigin(0.5);
 
       this.add.text(cx, gridY + cardH * 0.3, amountTxt, {
-        fontFamily: 'Fredoka', fontSize: Math.min(cardW * 0.18, 11) + 'px',
+        fontFamily: 'Orbitron', fontSize: Math.min(cardW * 0.18, 11) + 'px',
         color: '#ffe45e', align: 'center'
       }).setOrigin(0.5);
 
@@ -119,18 +119,17 @@ export class DailyChallengeScene extends Phaser.Scene {
     };
     drawBtn(false);
 
-    const btnLabel = this.add.text(0, 0, alreadyPlayedToday ? '⏳ Come Back Tomorrow!' : '🚀 Play Daily Challenge!', {
-      fontFamily: 'Fredoka', fontSize: '20px', color: '#0a001a', fontStyle: 'bold'
+    const btnLabelStr = alreadyPlayedToday ? '⏳ Come Back Tomorrow!' : '🚀 Play Daily Challenge!';
+    const btnFontSize = Math.min(Math.round(btnH * 0.38), Math.round(btnW / Math.max(btnLabelStr.length * 0.5, 1)), 18);
+    const btnLabel = this.add.text(0, 0, btnLabelStr, {
+      fontFamily: 'Orbitron', fontSize: `${btnFontSize}px`, color: '#0a001a', fontStyle: 'bold', align: 'center'
     }).setOrigin(0.5);
 
     btnContainer.add([btnGfx, btnLabel]);
 
     if (!alreadyPlayedToday) {
-      btnContainer.setSize(btnW, btnH).setInteractive({
-        hitArea: new Phaser.Geom.Rectangle(-btnW / 2, -btnH / 2, btnW, btnH),
-        hitAreaCallback: Phaser.Geom.Rectangle.Contains,
-        useHandCursor: true
-      });
+      btnContainer.setInteractive(new Phaser.Geom.Rectangle(-btnW / 2, -btnH / 2, btnW, btnH), Phaser.Geom.Rectangle.Contains);
+      btnContainer.input!.cursor = 'pointer';
       btnContainer.on('pointerover', () => drawBtn(true));
       btnContainer.on('pointerout',  () => drawBtn(false));
       btnContainer.on('pointerdown', () => {
@@ -144,15 +143,16 @@ export class DailyChallengeScene extends Phaser.Scene {
     }
 
     // Back button
-    const back = this.add.text(40, 35, '← Menu', {
-      fontFamily: 'Fredoka', fontSize: '20px', color: '#9b72ff'
-    }).setInteractive({ useHandCursor: true });
+    const back = this.add.text(45, 35, '◀ Menu', {
+      fontFamily: 'Orbitron', fontSize: '18px', color: '#9b72ff',
+      backgroundColor: '#1a0033aa', padding: { x: 12, y: 8 }
+    }).setOrigin(0.5).setInteractive({ useHandCursor: true });
     back.on('pointerdown', () => {
       audio.playTap();
       this.cameras.main.fadeOut(300, 10, 0, 26);
       this.time.delayedCall(320, () => this.scene.start('Menu'));
     });
-    back.on('pointerover', () => back.setColor('#ff85c1'));
-    back.on('pointerout',  () => back.setColor('#9b72ff'));
+    back.on('pointerover', () => { back.setColor('#ff85c1'); back.setBackgroundColor('#2a0055aa'); });
+    back.on('pointerout',  () => { back.setColor('#9b72ff'); back.setBackgroundColor('#1a0033aa'); });
   }
 }

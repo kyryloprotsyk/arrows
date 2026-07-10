@@ -29,14 +29,14 @@ export class WorldSelectScene extends Phaser.Scene {
 
     // Title
     this.add.text(W / 2, H * 0.08, '🌍  Choose a World', {
-      fontFamily: 'Fredoka', fontSize: Math.min(W * 0.08, 38) + 'px',
+      fontFamily: 'Orbitron', fontSize: Math.min(W * 0.08, 38) + 'px',
       color: '#ffffff',
       shadow: { offsetX: 0, offsetY: 4, color: '#6600ff', blur: 18, fill: true }
     }).setOrigin(0.5);
 
     // Stars total badge
     this.add.text(W / 2, H * 0.15, `Total Stars: ${totalStars} ⭐`, {
-      fontFamily: 'Fredoka', fontSize: '18px', color: '#ffe45e'
+      fontFamily: 'Orbitron', fontSize: '18px', color: '#ffe45e'
     }).setOrigin(0.5);
 
     // Grid details
@@ -61,16 +61,17 @@ export class WorldSelectScene extends Phaser.Scene {
     });
 
     // Back button
-    const backBtn = this.add.text(40, 35, '← Back', {
-      fontFamily: 'Fredoka', fontSize: '20px', color: '#9b72ff'
-    }).setInteractive({ useHandCursor: true });
+    const backBtn = this.add.text(45, 35, '◀ Back', {
+      fontFamily: 'Orbitron', fontSize: '18px', color: '#9b72ff',
+      backgroundColor: '#1a0033aa', padding: { x: 12, y: 8 }
+    }).setOrigin(0.5).setInteractive({ useHandCursor: true });
     backBtn.on('pointerdown', () => {
       audio.playTap();
       this.cameras.main.fadeOut(300, 10, 0, 26);
       this.time.delayedCall(320, () => this.scene.start('Menu'));
     });
-    backBtn.on('pointerover', () => backBtn.setColor('#ff85c1'));
-    backBtn.on('pointerout', () => backBtn.setColor('#9b72ff'));
+    backBtn.on('pointerover', () => { backBtn.setColor('#ff85c1'); backBtn.setBackgroundColor('#2a0055aa'); });
+    backBtn.on('pointerout', () => { backBtn.setColor('#9b72ff'); backBtn.setBackgroundColor('#1a0033aa'); });
   }
 
   private createWorldCard(
@@ -121,14 +122,14 @@ export class WorldSelectScene extends Phaser.Scene {
 
     // World name
     const nameText = this.add.text(textX, -textYOffset, world.name, {
-      fontFamily: 'Fredoka', fontSize: titleSize,
+      fontFamily: 'Orbitron', fontSize: titleSize,
       color: unlocked ? '#ffffff' : '#664477',
       shadow: unlocked ? { offsetX: 0, offsetY: 2, color: '#000', blur: 6, fill: true } : undefined
     }).setOrigin(0, 0.5);
 
     // Description / lock notice
     const descText = this.add.text(textX, textYOffset, unlocked ? world.desc : `🔒 Need ${world.starsNeeded} Stars`, {
-      fontFamily: 'Fredoka', fontSize: descSize,
+      fontFamily: 'Orbitron', fontSize: descSize,
       color: unlocked ? '#ccbbee' : '#664477'
     }).setOrigin(0, 0.5);
 

@@ -146,7 +146,7 @@ export class AdManagerClass {
         flex-direction: column;
         align-items: center;
         justify-content: center;
-        font-family: 'Fredoka', sans-serif;
+        font-family: 'Orbitron', sans-serif;
         color: #fff;
         user-select: none;
         animation: fadeIn 0.25s ease-out;
@@ -185,7 +185,7 @@ export class AdManagerClass {
             border: none;
             border-radius: 14px;
             color: #0a001a;
-            font-family: 'Fredoka', sans-serif;
+            font-family: 'Orbitron', sans-serif;
             font-size: 18px;
             font-weight: 700;
             padding: 14px 28px;

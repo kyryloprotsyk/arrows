@@ -13,9 +13,14 @@ import { LeaderboardScene }    from './scenes/LeaderboardScene';
 import { ProfileScene }        from './scenes/ProfileScene';
 import { DefeatScene }      from './scenes/DefeatScene';
 
-/** Returns the true viewport size — respects dvh on iOS/Android. */
 function getViewport() {
-  // visualViewport is more reliable than innerWidth/innerHeight on mobile
+  const container = document.getElementById('game-container');
+  if (container) {
+    return {
+      w: container.clientWidth,
+      h: container.clientHeight
+    };
+  }
   const vvp = window.visualViewport;
   return {
     w: vvp ? vvp.width  : window.innerWidth,

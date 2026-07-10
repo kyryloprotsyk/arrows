@@ -25,22 +25,25 @@ export class LeaderboardScene extends Phaser.Scene {
     }
 
     // Title
-    this.add.text(W / 2, Math.max(36, H * 0.06), '🏆 Global Leaderboard', {
-      fontFamily: 'Fredoka', fontSize: Math.min(W * 0.08, 38) + 'px',
+    this.add.text(W / 2, Math.max(46, H * 0.06), '🏆 Global Leaderboard', {
+      fontFamily: 'Orbitron', fontSize: Math.min(W * 0.07, 36) + 'px',
       color: '#ffe45e', stroke: '#ffffff', strokeThickness: 3,
       shadow: { offsetX: 0, offsetY: 4, color: '#ffa500', blur: 18, fill: true }
     }).setOrigin(0.5);
 
     // Close / Back button
-    const closeBtn = this.add.text(W - 28, Math.max(36, H * 0.06), '✖', {
-      fontFamily: 'Fredoka', fontSize: '26px', color: '#ff6b6b'
+    const closeBtn = this.add.text(45, 35, '◀ Menu', {
+      fontFamily: 'Orbitron', fontSize: '16px', color: '#9b72ff',
+      backgroundColor: '#1a0033aa', padding: { x: 12, y: 8 }
     }).setOrigin(0.5).setInteractive({ useHandCursor: true });
     closeBtn.on('pointerdown', () => { audio.playTap(); this.scene.start('Menu'); });
+    closeBtn.on('pointerover', () => { closeBtn.setColor('#ff85c1'); closeBtn.setBackgroundColor('#2a0055aa'); });
+    closeBtn.on('pointerout',  () => { closeBtn.setColor('#9b72ff'); closeBtn.setBackgroundColor('#1a0033aa'); });
 
     // Live sync banner at bottom
     const bottomY = H - 36;
     this.rankBannerText = this.add.text(W / 2, bottomY, '', {
-      fontFamily: 'Fredoka', fontSize: Math.min(W * 0.045, 18) + 'px',
+      fontFamily: 'Orbitron', fontSize: Math.min(W * 0.045, 18) + 'px',
       color: '#00ffcc', backgroundColor: '#002244aa',
       padding: { x: 16, y: 8 }
     }).setOrigin(0.5).setDepth(10);
@@ -73,7 +76,7 @@ export class LeaderboardScene extends Phaser.Scene {
     const cont = this.add.container(x, y);
     const gfx = this.add.graphics();
     const lbl = this.add.text(0, 0, text, {
-      fontFamily: 'Fredoka', fontSize: Math.min(w * 0.22, 15) + 'px', color: '#ffffff', fontStyle: 'bold'
+      fontFamily: 'Orbitron', fontSize: Math.min(w * 0.22, 13) + 'px', color: '#ffffff', fontStyle: 'bold'
     }).setOrigin(0.5);
 
     cont.add([gfx, lbl]);
@@ -124,7 +127,7 @@ export class LeaderboardScene extends Phaser.Scene {
     if (userRank > 15) {
       const ry = 15 * (rowH + 8) + 40;
       const div = this.add.text(W / 2, ry - 14, '• • • • • • • • • • • • •', {
-        fontFamily: 'Fredoka', fontSize: '14px', color: '#9b72ff'
+        fontFamily: 'Orbitron', fontSize: '14px', color: '#9b72ff'
       }).setOrigin(0.5);
       const userRow = this.createRowCard(W / 2, ry + 16, W - 32, rowH, userEntry, userRank, tab);
       this.listContainer.add([div, userRow]);
@@ -153,18 +156,18 @@ export class LeaderboardScene extends Phaser.Scene {
     const rankTxtCol = rank === 1 ? '#ffd700' : rank === 2 ? '#c0c0c0' : rank === 3 ? '#cd7f32' : '#aaaaaa';
     const rankStr = rank === 1 ? '🥇 #1' : rank === 2 ? '🥈 #2' : rank === 3 ? '🥉 #3' : `#${rank}`;
     const rankTxt = this.add.text(-w / 2 + 14, 0, rankStr, {
-      fontFamily: 'Fredoka', fontSize: rank <= 3 ? '18px' : '16px', color: rankTxtCol, fontStyle: 'bold'
+      fontFamily: 'Orbitron', fontSize: rank <= 3 ? '18px' : '16px', color: rankTxtCol, fontStyle: 'bold'
     }).setOrigin(0, 0.5);
 
     // Avatar + Username
     const nameStr = `${entry.avatar} ${entry.username}` + (isUser ? ' (YOU)' : '');
     const nameTxt = this.add.text(-w / 2 + 76, -8, nameStr, {
-      fontFamily: 'Fredoka', fontSize: Math.min(w * 0.042, 16) + 'px', color: isUser ? '#00ffcc' : '#ffffff', fontStyle: 'bold'
+      fontFamily: 'Orbitron', fontSize: Math.min(w * 0.042, 14) + 'px', color: isUser ? '#00ffcc' : '#ffffff', fontStyle: 'bold'
     }).setOrigin(0, 0.5);
 
     // Subtitle level
     const lvlTxt = this.add.text(-w / 2 + 76, 12, `Lvl ${entry.level} • ${entry.solved} Puzzles Solved`, {
-      fontFamily: 'Fredoka', fontSize: '12px', color: '#9b72ff'
+      fontFamily: 'Orbitron', fontSize: '11px', color: '#9b72ff'
     }).setOrigin(0, 0.5);
 
     // Right metric value
@@ -175,7 +178,7 @@ export class LeaderboardScene extends Phaser.Scene {
     else scoreStr = `${entry.xp.toLocaleString()} XP`;
 
     const scoreTxt = this.add.text(w / 2 - 16, 0, scoreStr, {
-      fontFamily: 'Fredoka', fontSize: '18px', color: '#ffe45e', fontStyle: 'bold'
+      fontFamily: 'Orbitron', fontSize: '18px', color: '#ffe45e', fontStyle: 'bold'
     }).setOrigin(1, 0.5);
 
     cont.add([gfx, rankTxt, nameTxt, lvlTxt, scoreTxt]);

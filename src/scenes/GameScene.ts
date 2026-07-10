@@ -51,6 +51,7 @@ export class GameScene extends Phaser.Scene {
   private coins = 0;
   private movesLeft = 0;
   private movesTotal = 0;
+  private parTotal = 0;
   private comboCount = 0;
   private lastEscapeTime = 0;
   private floorHeights: Map<string, number> = new Map();
@@ -79,6 +80,7 @@ export class GameScene extends Phaser.Scene {
   // ── Graphics ──────────────────────────────────────────────────────────
   private blockGfx!: Phaser.GameObjects.Graphics;
   private bgGfx!: Phaser.GameObjects.Graphics;
+  private cosmicGfx!: Phaser.GameObjects.Graphics;
 
   // ── Particles ─────────────────────────────────────────────────────────  // 🌟 Particles 🌟
   private trailEmitter!: Phaser.GameObjects.Particles.ParticleEmitter;
@@ -90,6 +92,7 @@ export class GameScene extends Phaser.Scene {
   private hudCoins!: Phaser.GameObjects.Text;
   private hudMoves!: Phaser.GameObjects.Text;
   private hudLevel!: Phaser.GameObjects.Text;
+  private hudPar!: Phaser.GameObjects.Text;
   private hudBar!: Phaser.GameObjects.Graphics;
   private comboLabel!: Phaser.GameObjects.Text;
   private tutLabel!: Phaser.GameObjects.Text;
@@ -120,7 +123,7 @@ export class GameScene extends Phaser.Scene {
     const worldHues: Record<number, number> = { 1: 330, 2: 175, 3: 270, 4: 195, 5: 210, 6: 15 };
     const wHue = worldHues[this.worldIndex] ?? 280;
     drawCartoonCosmicBg(this.bgGfx, W, H, wHue);
-    createCosmicEffects(this, W, H, wHue);
+    this.cosmicGfx = createCosmicEffects(this, W, H, wHue);
 
     // Graphics layers
     this.blockGfx = this.add.graphics().setDepth(5);
@@ -161,15 +164,17 @@ export class GameScene extends Phaser.Scene {
     this.worldIndex = world; this.levelIndex = level;
     this.levelData = levelGenerator.generateLevel(world, level);
     this.movesLeft = this.movesTotal = this.levelData.moveLimit;
+    this.parTotal = this.levelData.par;
     this.comboCount = 0;
 
     // Build buddy array
     this.buddies = this.levelData.blocks.map(cfg => {
       const { x: gx, y: gy, z: gz } = cfg;
       const hash = Math.abs(Math.floor(gx * 7 + gy * 13 + gz * 17));
+      const isPortalA = cfg.type === 'portal' && this.levelData.blocks.filter(b => b.type === 'portal').indexOf(cfg) % 2 === 0;
       const pal = cfg.type === 'normal' || cfg.type === 'rainbow'
         ? getBlockPalette(world, hash)
-        : this.getTypePalette(cfg.type);
+        : (cfg.type === 'portal' ? this.getPortalPalette(isPortalA) : this.getTypePalette(cfg.type));
 
       const sc = gridToScreen(gx, gy, gz, this.rotState);
       return {
@@ -253,6 +258,16 @@ export class GameScene extends Phaser.Scene {
       rotator:{ top: 0x00f0ff, left: 0x00a2cc, right: 0x006180, glow: 0x66f5ff }
     };
     return t[type] ?? { top: 0x888888, left: 0x555555, right: 0x333333, glow: 0xaaaaaa };
+  }
+
+  private getPortalPalette(isA: boolean) {
+    if (isA) {
+      // Blue portal
+      return { top: 0x002b47, left: 0x001d3d, right: 0x000814, glow: 0x00f0ff };
+    } else {
+      // Orange portal
+      return { top: 0x4a1e00, left: 0x3d1400, right: 0x1f0a00, glow: 0xff7700 };
+    }
   }
 
   private triggerHaptic(pattern: number | number[]) {
@@ -428,6 +443,18 @@ export class GameScene extends Phaser.Scene {
       return;
     }
 
+    // Portal: wiggle & explain
+    if (buddy.type === 'portal') {
+      audio.playTap();
+      buddy.state = 'bump';
+      buddy.animT = 0;
+      buddy.bumpDx = 0; buddy.bumpDy = -4; // small vertical wiggle
+      buddy.jellyDirX = 0; buddy.jellyDirY = 1;
+      buddy.jellyAngle = Math.PI / 2;
+      this.showMsg('🌀 Portal Cube! Teleports blocks to the matching color!');
+      return;
+    }
+
     // Find escape dir
     let escDir = { ...buddy.dir };
 
@@ -436,7 +463,21 @@ export class GameScene extends Phaser.Scene {
       if (!freeDir) { audio.playBump(); this.startBump(buddy); return; }
       escDir = freeDir;
     } else {
-      if (this.isBlocked(buddy, escDir)) { audio.playBump(); this.startBump(buddy); return; }
+      const check = this.checkEscapePath(buddy, escDir);
+      if (check.blocked) {
+        audio.playBump();
+        this.startBump(buddy);
+        return;
+      }
+
+      // Play portal particles transit effect if portals were transited
+      if (check.portalsTransited.length > 0) {
+        this.time.delayedCall(100, () => {
+          check.portalsTransited.forEach(p => {
+            this.spawnUnlockParticles(p.sx, p.sy);
+          });
+        });
+      }
     }
 
     // Launch with anticipation first!
@@ -469,19 +510,71 @@ export class GameScene extends Phaser.Scene {
     this.lastEscapeTime = now;
   }
 
-  private isBlocked(buddy: BuddyBlock, dir: BlockConfig['dir']): boolean {
+  private findFirstBlockAlongRay(pos: { x: number, y: number, z: number }, dir: { x: number, y: number, z: number }, ignoreId?: string): BuddyBlock | null {
+    let closestBlock: BuddyBlock | null = null;
+    let closestDist = Infinity;
+
     for (const other of this.buddies) {
-      if (other.id === buddy.id || other.state === 'escaping') continue;
-      const diff = { x: other.x - buddy.x, y: other.y - buddy.y, z: other.z - buddy.z };
+      if (other.id === ignoreId || other.state === 'escaping') continue;
+      
+      const diff = { x: other.x - pos.x, y: other.y - pos.y, z: other.z - pos.z };
       const dot = diff.x * dir.x + diff.y * dir.y + diff.z * dir.z;
-      if (dot > 0.05) {
+      
+      if (dot > 0.05) { // it is in front of pos along dir
         const proj = { x: dir.x * dot, y: dir.y * dot, z: dir.z * dot };
         const rem  = { x: diff.x - proj.x, y: diff.y - proj.y, z: diff.z - proj.z };
-        if (Math.abs(rem.x) < 0.1 && Math.abs(rem.y) < 0.1 && Math.abs(rem.z) < 0.1) return true;
+        
+        if (Math.abs(rem.x) < 0.1 && Math.abs(rem.y) < 0.1 && Math.abs(rem.z) < 0.1) {
+          if (dot < closestDist) {
+            closestDist = dot;
+            closestBlock = other;
+          }
+        }
       }
     }
-    return false;
+    return closestBlock;
   }
+
+  private checkEscapePath(buddy: BuddyBlock, dir: { x: number, y: number, z: number }): { blocked: boolean; portalsTransited: BuddyBlock[] } {
+    let currentPos = { x: buddy.x, y: buddy.y, z: buddy.z };
+    let currentDir = { ...dir };
+    let ignoreId = buddy.id;
+    const portalsTransited: BuddyBlock[] = [];
+    const visitedPortals = new Set<string>();
+
+    while (true) {
+      const hit = this.findFirstBlockAlongRay(currentPos, currentDir, ignoreId);
+      if (!hit) {
+        // Path is completely clear!
+        return { blocked: false, portalsTransited };
+      }
+
+      if (hit.type === 'rotator' && hit.state === 'escaping') {
+        return { blocked: false, portalsTransited };
+      }
+
+      // Teleportation logic
+      if (hit.type === 'portal') {
+        if (visitedPortals.has(hit.id)) {
+          return { blocked: true, portalsTransited }; // loop detected
+        }
+        visitedPortals.add(hit.id);
+
+        const partner = this.buddies.find(b => b.type === 'portal' && b.id !== hit.id && b.targetChestId === hit.targetChestId);
+        if (partner) {
+          portalsTransited.push(hit);
+          portalsTransited.push(partner);
+          currentPos = { x: partner.x, y: partner.y, z: partner.z };
+          ignoreId = partner.id;
+          continue;
+        }
+      }
+
+      // Any other hit blocks
+      return { blocked: true, portalsTransited };
+    }
+  }
+
 
   private findFreeDirection(buddy: BuddyBlock): BlockConfig['dir'] | null {
     const dirs = [
@@ -489,7 +582,7 @@ export class GameScene extends Phaser.Scene {
       { x: 0, y: 1, z: 0 }, { x: 0, y: -1, z: 0 },
       { x: 0, y: 0, z: 1 }, { x: 0, y: 0, z: -1 }
     ].sort(() => Math.random() - 0.5);
-    return dirs.find(d => !this.isBlocked(buddy, d)) ?? null;
+    return dirs.find(d => !this.checkEscapePath(buddy, d).blocked) ?? null;
   }
 
   private startAnticipation(buddy: BuddyBlock, dir: BlockConfig['dir']) {
@@ -546,6 +639,8 @@ export class GameScene extends Phaser.Scene {
     buddy.jellyDirY = dy / len;
     buddy.jellyAngle = Math.atan2(dy, dx);
 
+    // Juice: small camera shake on blocked bump to make it feel tactile/impactful
+    this.cameras.main.shake(80, 0.007);
     this.triggerHaptic(30);
   }
 
@@ -632,6 +727,11 @@ export class GameScene extends Phaser.Scene {
     this.panY  = Phaser.Math.Linear(this.panY,  this.panTargetY, panDecay);
     this.camZoom = Phaser.Math.Linear(this.camZoom, this.zoomTarget, zoomDecay);
 
+    // Parallax background layer shift
+    if (this.cosmicGfx) {
+      this.cosmicGfx.setPosition(this.panX * 0.12, this.panY * 0.12);
+    }
+
     // Get pointer world coordinates for hover detection
     const pointer = this.input.activePointer;
     const wx = (pointer.x - this.centerX) / this.camZoom - this.panX;
@@ -678,6 +778,13 @@ export class GameScene extends Phaser.Scene {
         const ratio = Math.sin((b.animT / dur) * Math.PI);
         b.sx = base.x + b.bumpDx * ratio;
         b.sy = base.y + b.bumpDy * ratio;
+
+        // Juice: Spawn charge-up trail particles
+        if (Math.random() < 0.45) {
+          const sPos = this.getScreenPos(b);
+          this.trailEmitter.setParticleTint([b.palGlow || 0x00ffff, 0xffffff]);
+          this.trailEmitter.explode(1, sPos.x + (Math.random() - 0.5) * 15, sPos.y + (Math.random() - 0.5) * 15);
+        }
 
         if (b.animT >= dur) {
           this.startEscape(b);
@@ -808,12 +915,37 @@ export class GameScene extends Phaser.Scene {
     g.setPosition(this.centerX + this.panX, this.centerY + this.panY);
     g.setScale(this.camZoom);
 
+    // Pass 1: Draw all solid cubes, hats, faces
     for (const b of this.buddies) {
-      this.drawBlock(g, b);
+      this.drawBlock(g, b, false);
+    }
+
+    // Pass 2: Draw all neon arrows on top of everything to prevent z-index clipping
+    for (const b of this.buddies) {
+      if (b.type !== 'chest' && b.state !== 'escaping') {
+        const cx = b.sx, cy = b.sy;
+        const scalePara = b.jellyScalePara;
+        const scalePerp = b.jellyScalePerp;
+        const angle = b.jellyAngle;
+        const cos = Math.cos(angle);
+        const sin = Math.sin(angle);
+        const transformer = (x: number, y: number) => {
+          const dx = x - cx;
+          const dy = y - (cy + 21);
+          const rx = dx * cos + dy * sin;
+          const ry = -dx * sin + dy * cos;
+          const rxScaled = rx * scalePara;
+          const ryScaled = ry * scalePerp;
+          const dxPrime = rxScaled * cos - ryScaled * sin;
+          const dyPrime = rxScaled * sin + ryScaled * cos;
+          return { x: cx + dxPrime, y: (cy + 21) + dyPrime };
+        };
+        this.drawArrowIndicator(g, b, cx, cy, transformer);
+      }
     }
   }
 
-  private drawBlock(g: Phaser.GameObjects.Graphics, b: BuddyBlock) {
+  private drawBlock(g: Phaser.GameObjects.Graphics, b: BuddyBlock, drawArrow = true) {
     const cx = b.sx, cy = b.sy;
 
     // Rainbow color override
@@ -933,8 +1065,36 @@ export class GameScene extends Phaser.Scene {
       g.fillPath();
     }
 
+    if (b.type === 'portal') {
+      const blocksOfPortal = this.buddies.filter(x => x.type === 'portal');
+      const isA = blocksOfPortal.indexOf(b) % 2 === 0;
+      const portalCol = isA ? 0x00f0ff : 0xff7700;
+
+      // Draw swirling portal vortex on the top face
+      g.lineStyle(2.5, portalCol, 0.95);
+      g.beginPath();
+      const steps = 18;
+      const timeOffset = this.time.now * 0.006;
+      for (let i = 0; i <= steps; i++) {
+        const factor = i / steps;
+        const rad = factor * 14;
+        const ang = factor * Math.PI * 4 + timeOffset;
+        const px = cx + Math.cos(ang) * rad;
+        const py = cy - th * 0.5 + Math.sin(ang) * rad * 0.5;
+        const pt = tPt(px, py);
+        if (i === 0) g.moveTo(pt.x, pt.y);
+        else g.lineTo(pt.x, pt.y);
+      }
+      g.strokePath();
+
+      // Emissive core dot
+      g.fillStyle(0xffffff, 0.9);
+      const corePos = tPt(cx, cy - th * 0.5);
+      g.fillCircle(corePos.x, corePos.y, 4 * Math.min(scaleX, scaleY));
+    }
+
     // ─── FACE: Eyes & Expressions ─────────────────────────────────────
-    if (b.type !== 'chest' || !isLocked) {
+    if (b.type !== 'chest' && b.type !== 'portal') {
       const eyeY = cy - 4;
       const eyeScaleY = b.isBlinking ? 0.15 : 1;
 
@@ -1038,7 +1198,7 @@ export class GameScene extends Phaser.Scene {
     }
 
     // ─── Arrow Direction Indicator ─────────────────────────────────────
-    if (b.type !== 'chest') {
+    if (drawArrow && b.type !== 'chest') {
       this.drawArrowIndicator(g, b, cx, cy, transformer);
     }
   }
@@ -1046,7 +1206,8 @@ export class GameScene extends Phaser.Scene {
   private drawArrowIndicator(
     g: Phaser.GameObjects.Graphics,
     b: BuddyBlock,
-    cx: number, cy: number,
+    cx: number,
+    cy: number,
     transformer: (x: number, y: number) => { x: number; y: number }
   ) {
     // Project escape direction to screen
@@ -1056,22 +1217,23 @@ export class GameScene extends Phaser.Scene {
     const len = Math.hypot(dx, dy) || 1;
     const nx = dx / len, ny = dy / len;
 
-    // Place neon arrow inside the transformed block center
-    const ay = cy + 20;
+    // Place neon arrow inside the transformed block's TOP face
+    const ay = cy - 13;
     const tPt = (x: number, y: number) => transformer(x, y);
 
-    const pBase = tPt(cx - nx * 14, ay - ny * 14);
-    const pTip = tPt(cx + nx * 18, ay + ny * 18);
-    const pLeft = tPt(cx + nx * 4 - ny * 9, ay + ny * 4 + nx * 9);
-    const pRight = tPt(cx + nx * 4 + ny * 9, ay + ny * 4 - nx * 9);
+    const pBase = tPt(cx - nx * 12, ay - ny * 12);
+    const pTip = tPt(cx + nx * 14, ay + ny * 14);
+    const pLeft = tPt(cx + nx * 4 - ny * 7, ay + ny * 4 + nx * 7);
+    const pRight = tPt(cx + nx * 4 + ny * 7, ay + ny * 4 - nx * 7);
 
     const col = b.type === 'rainbow' ? hslToInt(b.rainbowHue * 360, 100, 80) : b.palGlow;
 
-    // Glowing chevron passes
-    for (let pass = 0; pass < 3; pass++) {
-      const alpha = [0.15, 0.35, 0.75][pass];
-      const width = [7, 4, 1.8][pass];
-      g.lineStyle(width, col, alpha);
+    // Glowing chevron passes - 4 passes for ultra-premium emissive neon glow
+    for (let pass = 0; pass < 4; pass++) {
+      const alpha = [0.25, 0.45, 0.75, 1.0][pass];
+      const width = [8, 5, 2.5, 1.2][pass];
+      const passCol = pass === 3 ? 0xffffff : col;
+      g.lineStyle(width, passCol, alpha);
       
       // Shaft
       g.beginPath();
@@ -1229,7 +1391,8 @@ export class GameScene extends Phaser.Scene {
           world: this.worldIndex, level: this.levelIndex,
           stars, reward, movesLeft: this.movesLeft, isDaily: this.isDaily,
           xpEarned: xpGain, oldLevel: xpRes.oldLevel, newLevel: xpRes.newLevel,
-          userRank: ldbRes.userRank
+          userRank: ldbRes.userRank,
+          par: this.parTotal, movesTotal: this.movesTotal
         });
       });
     });
@@ -1263,33 +1426,39 @@ export class GameScene extends Phaser.Scene {
     this.drawHUDBar(W, hudH);
 
     this.hudLevel = this.add.text(W / 2, hudY, '', {
-      fontFamily: 'Fredoka', fontSize: fs + 'px', color: '#ffffff',
+      fontFamily: 'Orbitron', fontSize: fs + 'px', color: '#ffffff',
       shadow: { offsetX: 0, offsetY: 2, color: '#6600ff', blur: 10, fill: true }
     }).setOrigin(0.5).setDepth(21);
 
     this.hudCoins = this.add.text(pad, hudY, '🪙 0', {
-      fontFamily: 'Fredoka', fontSize: fs + 'px', color: '#ffe45e'
+      fontFamily: 'Orbitron', fontSize: fs + 'px', color: '#ffe45e'
     }).setOrigin(0, 0.5).setDepth(21);
 
     this.hudMoves = this.add.text(W - pad, hudY, '⚡ 0', {
-      fontFamily: 'Fredoka', fontSize: fs + 'px', color: '#74c0fc'
+      fontFamily: 'Orbitron', fontSize: fs + 'px', color: '#74c0fc'
     }).setOrigin(1, 0.5).setDepth(21);
+
+    // Par indicator (shown below moves counter on right side)
+    this.hudPar = this.add.text(W - pad, hudH + 6, 'PAR', {
+      fontFamily: 'Orbitron', fontSize: Math.round(fs * 0.65) + 'px', color: '#ffe45e',
+      backgroundColor: '#00000066', padding: { x: 6, y: 2 }
+    }).setOrigin(1, 0).setDepth(21);
 
     // Combo label
     this.comboLabel = this.add.text(W / 2, H * 0.18, '', {
-      fontFamily: 'Fredoka', fontSize: comboFs + 'px',
+      fontFamily: 'Orbitron', fontSize: comboFs + 'px',
       color: '#ffe45e', stroke: '#ffffff', strokeThickness: 3,
       shadow: { offsetX: 0, offsetY: 5, color: '#ff8800', blur: 20, fill: true }
     }).setOrigin(0.5).setDepth(21).setAlpha(0);
 
     // Tutorial/message label — above the bottom buttons
     this.tutLabel = this.add.text(W / 2, btnY - 36, '', {
-      fontFamily: 'Fredoka', fontSize: msgFs + 'px', color: '#ccbbff',
+      fontFamily: 'Orbitron', fontSize: msgFs + 'px', color: '#ccbbff',
       backgroundColor: '#22004488', padding: { x: 12, y: 6 }
     }).setOrigin(0.5).setDepth(21).setAlpha(0);
 
     // Buttons: Home, Reset, Rotate — properly sized and spaced
-    const btnStyle = { fontFamily: 'Fredoka', fontSize: btnFs + 'px', color: '#ffffff' };
+    const btnStyle = { fontFamily: 'Orbitron', fontSize: btnFs + 'px', color: '#ffffff' };
     const btnSpacing = btnFs * 2.2;
     const home  = this.add.text(W - pad - btnFs * 0.5, btnY, '🏠', btnStyle)
       .setOrigin(0.5).setDepth(21).setInteractive({ useHandCursor: true });
@@ -1324,6 +1493,18 @@ export class GameScene extends Phaser.Scene {
     }
     this.hudCoins.setText(`🪙 ${GameData.coins.get()}`);
     this.hudMoves.setText(`⚡ ${this.movesLeft}`);
+
+    // Par indicator
+    if (this.hudPar) {
+      const parDiff = this.movesLeft - (this.movesTotal - this.parTotal);
+      if (parDiff > 0) {
+        this.hudPar.setText(`PAR -${parDiff}`).setColor('#00ffcc');
+      } else if (parDiff === 0) {
+        this.hudPar.setText('PAR').setColor('#ffe45e');
+      } else {
+        this.hudPar.setText(`PAR +${Math.abs(parDiff)}`).setColor('#ff6b6b');
+      }
+    }
 
     // Red tint moves when low
     this.hudMoves.setColor(this.movesLeft <= 3 ? '#ff6b6b' : '#74c0fc');

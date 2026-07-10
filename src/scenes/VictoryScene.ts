@@ -10,9 +10,10 @@ export class VictoryScene extends Phaser.Scene {
 
   create(data: {
     world: number; level: number; stars: number; reward: number; movesLeft: number;
-    isDaily?: boolean; xpEarned?: number; oldLevel?: number; newLevel?: number; userRank?: number
+    isDaily?: boolean; xpEarned?: number; oldLevel?: number; newLevel?: number;
+    userRank?: number; par?: number; movesTotal?: number;
   }) {
-    const { world, level, stars, reward, isDaily, xpEarned, oldLevel, newLevel, userRank } = data;
+    const { world, level, stars, reward, isDaily, xpEarned, oldLevel, newLevel, userRank, par, movesTotal } = data;
     const W = this.scale.width, H = this.scale.height;
 
     this.cameras.main.setBackgroundColor('#0a001a');
@@ -41,7 +42,7 @@ export class VictoryScene extends Phaser.Scene {
     // LEVEL CLEAR / DAILY COMPLETE heading
     const clearTitle = isDaily ? '🔥 DAILY COMPLETE! (+150 🪙)' : '✨ LEVEL CLEAR! ✨';
     const clearTxt = this.add.text(W / 2, H * 0.35, clearTitle, {
-      fontFamily: 'Fredoka',
+      fontFamily: 'Orbitron',
       fontSize: Math.min(W * (isDaily ? 0.075 : 0.09), 48) + 'px',
       color: '#ffe45e',
       stroke: '#ffffff', strokeThickness: 4,
@@ -54,16 +55,36 @@ export class VictoryScene extends Phaser.Scene {
     });
 
     // Star rating display
-    this.createStarRow(W / 2, H * 0.45, stars);
+    this.createStarRow(W / 2, H * 0.44, stars);
+
+    // Par score badge
+    if (par !== undefined && movesTotal !== undefined) {
+      const movesUsed = movesTotal - (data.movesLeft ?? 0);
+      const parDiff = movesUsed - par;
+      const parLabel = parDiff < 0 ? `🏆 Under Par (${parDiff})` :
+                       parDiff === 0 ? '⚡ Par!' :
+                       `+${parDiff} Over Par`;
+      const parColor = parDiff < 0 ? '#00ffcc' : parDiff === 0 ? '#ffe45e' : '#ff6b6b';
+      const parBg = this.add.graphics().setAlpha(0);
+      const pw = Math.min(W * 0.5, 180), ph = 28;
+      parBg.fillStyle(0x110022, 0.9);
+      parBg.fillRoundedRect(W / 2 - pw / 2, H * 0.495 - ph / 2, pw, ph, 14);
+      parBg.lineStyle(1.5, parDiff < 0 ? 0x00ffcc : parDiff === 0 ? 0xffe45e : 0xff6b6b, 0.8);
+      parBg.strokeRoundedRect(W / 2 - pw / 2, H * 0.495 - ph / 2, pw, ph, 14);
+      const parTxt = this.add.text(W / 2, H * 0.495, parLabel, {
+        fontFamily: 'Orbitron', fontSize: '14px', color: parColor, fontStyle: 'bold'
+      }).setOrigin(0.5).setAlpha(0);
+      this.tweens.add({ targets: [parBg, parTxt], alpha: 1, duration: 400, delay: 700 });
+    }
 
     // Stats card
-    this.createStatsCard(W / 2, H * 0.56, reward, xpEarned, userRank);
+    this.createStatsCard(W / 2, H * 0.565, reward, xpEarned, userRank);
 
     // Level up check
     if (newLevel && oldLevel && newLevel > oldLevel) {
       GameData.coins.add(100);
       const lvlUpBanner = this.add.text(W / 2, H * 0.64, `🎉 LEVEL UP! Lvl ${oldLevel} → ${newLevel}! (+100 Bonus Coins) 🎉`, {
-        fontFamily: 'Fredoka', fontSize: Math.min(W * 0.045, 17) + 'px',
+        fontFamily: 'Orbitron', fontSize: Math.min(W * 0.045, 17) + 'px',
         color: '#00ffcc', backgroundColor: '#002244ee', padding: { x: 14, y: 6 }
       }).setOrigin(0.5).setDepth(15).setAlpha(0);
 
@@ -227,8 +248,8 @@ export class VictoryScene extends Phaser.Scene {
       const filled = i < stars;
       const x = cx + (i - 1) * spacing;
       const star = this.add.text(x, cy, filled ? '⭐' : '☆', {
-        fontFamily: 'Fredoka',
-        fontSize: filled ? '52px' : '40px',
+        fontFamily: 'Orbitron',
+        fontSize: filled ? '48px' : '36px',
         color: filled ? '#ffe45e' : '#443344'
       }).setOrigin(0.5).setAlpha(0).setScale(0.3);
 
@@ -250,27 +271,27 @@ export class VictoryScene extends Phaser.Scene {
   }
 
   private createStatsCard(cx: number, cy: number, reward: number, xpEarned?: number, userRank?: number) {
-    const w = Math.min(this.scale.width * 0.85, 330), h = 76;
+    const w = Math.min(this.scale.width * 0.85, 330), h = 100;
     const g = this.add.graphics().setAlpha(0);
     g.fillStyle(0x1a0040, 0.9);
     g.fillRoundedRect(cx - w / 2, cy - h / 2, w, h, 16);
     g.lineStyle(1.5, 0x00ffcc, 0.6);
     g.strokeRoundedRect(cx - w / 2, cy - h / 2, w, h, 16);
 
-    const coins = this.add.text(cx - w * 0.28, cy - 14, `🪙 +${reward}`, {
-      fontFamily: 'Fredoka', fontSize: '20px', color: '#ffe45e', fontStyle: 'bold'
+    const coins = this.add.text(cx - w * 0.28, cy - 20, `🪙 +${reward}`, {
+      fontFamily: 'Orbitron', fontSize: '20px', color: '#ffe45e', fontStyle: 'bold'
     }).setOrigin(0.5).setAlpha(0);
 
-    const xp = this.add.text(cx, cy - 14, `⚡ +${xpEarned || 85} XP`, {
-      fontFamily: 'Fredoka', fontSize: '20px', color: '#00ffcc', fontStyle: 'bold'
+    const xp = this.add.text(cx, cy - 20, `⚡ +${xpEarned || 85} XP`, {
+      fontFamily: 'Orbitron', fontSize: '20px', color: '#00ffcc', fontStyle: 'bold'
     }).setOrigin(0.5).setAlpha(0);
 
-    const moves = this.add.text(cx + w * 0.28, cy - 14, `🔥 ${GameData.winStreak.get()}x Streak`, {
-      fontFamily: 'Fredoka', fontSize: '18px', color: '#ff6eb4', fontStyle: 'bold'
+    const moves = this.add.text(cx + w * 0.28, cy - 20, `🔥 ${GameData.winStreak.get()}x Streak`, {
+      fontFamily: 'Orbitron', fontSize: '18px', color: '#ff6eb4', fontStyle: 'bold'
     }).setOrigin(0.5).setAlpha(0);
 
-    const total = this.add.text(cx, cy + 18, `Total: ${GameData.coins.get()}🪙  •  Global Rank: #${userRank || 15} 🏆`, {
-      fontFamily: 'Fredoka', fontSize: '14px', color: '#ccbbff'
+    const total = this.add.text(cx, cy + 22, `Total: ${GameData.coins.get()}🪙  •  Global Rank: #${userRank || 15} 🏆`, {
+      fontFamily: 'Orbitron', fontSize: '16px', color: '#ccbbff'
     }).setOrigin(0.5).setAlpha(0);
 
     this.tweens.add({ targets: [g, coins, xp, moves, total], alpha: 1, duration: 500, delay: 900 });
@@ -296,17 +317,21 @@ export class VictoryScene extends Phaser.Scene {
     };
     draw(false);
 
+    const labelLen = label.replace(/\p{Emoji}/gu, '  ').length;
+    const fontSize = Math.min(Math.round(h * 0.42), Math.round(w / Math.max(labelLen * 0.52, 1)), 22);
+
     const txt = this.add.text(0, 0, label, {
-      fontFamily: 'Fredoka', fontSize: '20px', color: '#ffffff'
+      fontFamily: 'Orbitron',
+      fontSize: `${fontSize}px`,
+      color: '#ffffff',
+      stroke: '#000000', strokeThickness: 1.5,
+      align: 'center'
     }).setOrigin(0.5);
 
     container.add([g, txt]);
 
-    container.setSize(w, h).setInteractive({
-      hitArea: new Phaser.Geom.Rectangle(-w / 2, -h / 2, w, h),
-      hitAreaCallback: Phaser.Geom.Rectangle.Contains,
-      useHandCursor: true
-    });
+    container.setInteractive(new Phaser.Geom.Rectangle(-w / 2, -h / 2, w, h), Phaser.Geom.Rectangle.Contains);
+    container.input!.cursor = 'pointer';
 
     container.on('pointerover', () => {
       draw(true);

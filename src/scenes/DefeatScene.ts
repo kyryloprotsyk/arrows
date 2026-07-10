@@ -24,7 +24,7 @@ export class DefeatScene extends Phaser.Scene {
 
     // DEFEAT heading
     const clearTxt = this.add.text(W / 2, H * 0.42, 'OUT OF MOVES!', {
-      fontFamily: 'Fredoka',
+      fontFamily: 'Orbitron',
       fontSize: Math.min(W * 0.1, 52) + 'px',
       color: '#ff4d4d',
       stroke: '#4a0000', strokeThickness: 6,
@@ -169,16 +169,14 @@ export class DefeatScene extends Phaser.Scene {
     };
     drawAdBtn(false);
 
+    const adFontSize = Math.min(Math.round(adBtnH * 0.38), Math.round(adBtnW / Math.max('🎬 Watch Ad for +5 Moves'.length * 0.5, 1)), 20);
     const adTxt = this.add.text(0, 0, '🎬 Watch Ad for +5 Moves', {
-      fontFamily: 'Fredoka', fontSize: '22px', color: '#000', fontStyle: 'bold'
+      fontFamily: 'Orbitron', fontSize: `${adFontSize}px`, color: '#000', fontStyle: 'bold', align: 'center'
     }).setOrigin(0.5);
 
     adBtn.add([adGfx, adTxt]);
-    adBtn.setSize(adBtnW, adBtnH).setInteractive({
-      hitArea: new Phaser.Geom.Rectangle(-adBtnW / 2, -adBtnH / 2, adBtnW, adBtnH),
-      hitAreaCallback: Phaser.Geom.Rectangle.Contains,
-      useHandCursor: true
-    });
+    adBtn.setInteractive(new Phaser.Geom.Rectangle(-adBtnW / 2, -adBtnH / 2, adBtnW, adBtnH), Phaser.Geom.Rectangle.Contains);
+    adBtn.input!.cursor = 'pointer';
     
     adBtn.on('pointerover', () => { drawAdBtn(true); this.tweens.add({ targets: adBtn, scale: 1.05, duration: 150 }); });
     adBtn.on('pointerout', () => { drawAdBtn(false); this.tweens.add({ targets: adBtn, scale: 1, duration: 150 }); });
@@ -207,16 +205,14 @@ export class DefeatScene extends Phaser.Scene {
     };
     drawRestartBtn(false);
 
+    const restartFontSize = Math.min(Math.round(restartBtnH * 0.38), Math.round(restartBtnW / Math.max('🔄 Restart Level'.length * 0.5, 1)), 20);
     const restartTxt = this.add.text(0, 0, '🔄 Restart Level', {
-      fontFamily: 'Fredoka', fontSize: '20px', color: '#ffffff', fontStyle: 'bold'
+      fontFamily: 'Orbitron', fontSize: `${restartFontSize}px`, color: '#ffffff', fontStyle: 'bold', align: 'center'
     }).setOrigin(0.5);
 
     restartBtn.add([restartGfx, restartTxt]);
-    restartBtn.setSize(restartBtnW, restartBtnH).setInteractive({
-      hitArea: new Phaser.Geom.Rectangle(-restartBtnW / 2, -restartBtnH / 2, restartBtnW, restartBtnH),
-      hitAreaCallback: Phaser.Geom.Rectangle.Contains,
-      useHandCursor: true
-    });
+    restartBtn.setInteractive(new Phaser.Geom.Rectangle(-restartBtnW / 2, -restartBtnH / 2, restartBtnW, restartBtnH), Phaser.Geom.Rectangle.Contains);
+    restartBtn.input!.cursor = 'pointer';
 
     restartBtn.on('pointerover', () => { drawRestartBtn(true); this.tweens.add({ targets: restartBtn, scale: 1.05, duration: 150 }); });
     restartBtn.on('pointerout', () => { drawRestartBtn(false); this.tweens.add({ targets: restartBtn, scale: 1, duration: 150 }); });
@@ -233,7 +229,7 @@ export class DefeatScene extends Phaser.Scene {
     const quitBtnW = 160, quitBtnH = 40;
     const quitBtn = this.add.container(cx, cy + 160).setAlpha(0);
     const quitTxt = this.add.text(0, 0, '🏠 Main Menu', {
-      fontFamily: 'Fredoka', fontSize: '18px', color: '#aaaaaa'
+      fontFamily: 'Orbitron', fontSize: Math.min(Math.round(quitBtnH * 0.42), 18) + 'px', color: '#aaaaaa', align: 'center'
     }).setOrigin(0.5);
     quitBtn.add(quitTxt);
     quitBtn.setSize(quitBtnW, quitBtnH).setInteractive({ useHandCursor: true });

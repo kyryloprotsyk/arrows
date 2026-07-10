@@ -23,13 +23,13 @@ export class ProfileScene extends Phaser.Scene {
 
     // Title & Close Button
     this.add.text(W / 2, Math.max(36, H * 0.06), '👤 Player Profile & Prestige', {
-      fontFamily: 'Fredoka', fontSize: Math.min(W * 0.075, 36) + 'px',
+      fontFamily: 'Orbitron', fontSize: Math.min(W * 0.075, 36) + 'px',
       color: '#ffe45e', stroke: '#ffffff', strokeThickness: 3,
       shadow: { offsetX: 0, offsetY: 4, color: '#ffa500', blur: 18, fill: true }
     }).setOrigin(0.5);
 
     const closeBtn = this.add.text(W - 28, Math.max(36, H * 0.06), '✖', {
-      fontFamily: 'Fredoka', fontSize: '26px', color: '#ff6b6b'
+      fontFamily: 'Orbitron', fontSize: '26px', color: '#ff6b6b'
     }).setOrigin(0.5).setInteractive({ useHandCursor: true });
     closeBtn.on('pointerdown', () => { audio.playTap(); this.scene.start('Menu'); });
 
@@ -53,16 +53,16 @@ export class ProfileScene extends Phaser.Scene {
     // Username display + cycle prompt
     const currentName = GameData.username.get();
     const nameTxt = this.add.text(W / 2, cardY + 10, currentName, {
-      fontFamily: 'Fredoka', fontSize: '24px', color: '#ffffff', fontStyle: 'bold'
+      fontFamily: 'Orbitron', fontSize: '24px', color: '#ffffff', fontStyle: 'bold'
     }).setOrigin(0.5).setInteractive({ useHandCursor: true });
 
     const rankTitle = GameData.playerXP.getRankTitle();
     this.add.text(W / 2, cardY + 42, `✨ ${rankTitle} ✨`, {
-      fontFamily: 'Fredoka', fontSize: '15px', color: '#ff79a8', fontStyle: 'bold'
+      fontFamily: 'Orbitron', fontSize: '15px', color: '#ff79a8', fontStyle: 'bold'
     }).setOrigin(0.5);
 
     this.add.text(W / 2, cardY + 68, '👆 Tap Avatar or Name to Customize!', {
-      fontFamily: 'Fredoka', fontSize: '12px', color: '#9b72ff'
+      fontFamily: 'Orbitron', fontSize: '12px', color: '#9b72ff'
     }).setOrigin(0.5);
 
     // Avatar Picker logic
@@ -105,10 +105,10 @@ export class ProfileScene extends Phaser.Scene {
     const progress = nextLvlXP > prevLvlXP ? Math.min(1, Math.max(0, (currentXP - prevLvlXP) / (nextLvlXP - prevLvlXP))) : 1;
 
     this.add.text((W - cardW) / 2 + 6, xpY - 20, `Player Level ${lvl}`, {
-      fontFamily: 'Fredoka', fontSize: '18px', color: '#00ffcc', fontStyle: 'bold'
+      fontFamily: 'Orbitron', fontSize: '18px', color: '#00ffcc', fontStyle: 'bold'
     });
     this.add.text((W + cardW) / 2 - 6, xpY - 20, `${currentXP.toLocaleString()} / ${nextLvlXP.toLocaleString()} XP`, {
-      fontFamily: 'Fredoka', fontSize: '14px', color: '#ccbbff'
+      fontFamily: 'Orbitron', fontSize: '14px', color: '#ccbbff'
     }).setOrigin(1, 0);
 
     const barW = cardW;
@@ -144,11 +144,11 @@ export class ProfileScene extends Phaser.Scene {
       bgx.strokeRoundedRect(bx - boxW / 2, by - boxH / 2, boxW, boxH, 12);
 
       this.add.text(bx, by - 12, st.label, {
-        fontFamily: 'Fredoka', fontSize: '13px', color: '#ccbbff'
+        fontFamily: 'Orbitron', fontSize: '13px', color: '#ccbbff'
       }).setOrigin(0.5);
 
       this.add.text(bx, by + 12, st.value, {
-        fontFamily: 'Fredoka', fontSize: '19px', color: st.color, fontStyle: 'bold'
+        fontFamily: 'Orbitron', fontSize: '19px', color: st.color, fontStyle: 'bold'
       }).setOrigin(0.5);
     });
 
@@ -162,7 +162,7 @@ export class ProfileScene extends Phaser.Scene {
     bgLdb.strokeRoundedRect(-wLdb / 2, -hLdb / 2, wLdb, hLdb, 24);
 
     const txtLdb = this.add.text(0, 0, '🏆 View Global Leaderboard →', {
-      fontFamily: 'Fredoka', fontSize: '18px', color: '#ffffff', fontStyle: 'bold'
+      fontFamily: 'Orbitron', fontSize: '16px', color: '#ffffff', fontStyle: 'bold'
     }).setOrigin(0.5);
 
     btnLdb.add([bgLdb, txtLdb]);

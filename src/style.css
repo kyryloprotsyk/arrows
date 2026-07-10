@@ -28,16 +28,18 @@ body {
 
 /* Game container fills the safe area (notch-aware) */
 #game-container {
-  position: fixed;
-  inset: 0;
-  /* respect iOS notch / Android cutout */
-  padding:
-    env(safe-area-inset-top)
-    env(safe-area-inset-right)
-    env(safe-area-inset-bottom)
-    env(safe-area-inset-left);
-  width: 100%;
-  height: 100%;
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  width: 100dvw;
+  height: 100dvh;
+  /* Enforce aspect-ratio constraints for portrait layouts (between 9:21 and 3:4) */
+  max-width: calc(100dvh * 0.75);
+  max-height: calc(100dvw / 0.428);
+  box-shadow: 0 0 50px rgba(0, 0, 0, 0.9);
+  background: #0a001a;
+  overflow: hidden;
 }
 
 /* Canvas always fills the container exactly — Phaser handles aspect ratio */

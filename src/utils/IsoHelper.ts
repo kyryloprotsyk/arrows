@@ -560,14 +560,18 @@ export function drawCartoonCosmicBg(g: Phaser.GameObjects.Graphics, W: number, H
   }
 }
 
-/** Spawns cartoon-style stars, confetti, and comets */
-export function createCosmicEffects(scene: Phaser.Scene, W: number, H: number, worldHue = 280) {
+export function createCosmicEffects(scene: Phaser.Scene, W: number, H: number, worldHue = 280): Phaser.GameObjects.Graphics {
   const gfx = scene.add.graphics();
   
+  const oW = W * 1.3;
+  const oH = H * 1.3;
+  const startX = -W * 0.15;
+  const startY = -H * 0.15;
+
   // 1. Vibrant Stars
-  for (let i = 0; i < 60; i++) {
-    const x = Math.random() * W;
-    const y = Math.random() * H * 0.6; // mostly above horizon
+  for (let i = 0; i < 70; i++) {
+    const x = startX + Math.random() * oW;
+    const y = startY + Math.random() * oH * 0.6; // mostly above horizon
     const size = Math.random() * 2 + 1;
     const isBright = Math.random() > 0.8;
     
@@ -582,8 +586,8 @@ export function createCosmicEffects(scene: Phaser.Scene, W: number, H: number, w
 
   // 2. Confetti / Floating Neon Bits
   for (let i = 0; i < 30; i++) {
-    const x = Math.random() * W;
-    const y = Math.random() * H;
+    const x = startX + Math.random() * oW;
+    const y = startY + Math.random() * oH;
     const w = 4 + Math.random() * 6;
     const h = 4 + Math.random() * 6;
     const hue = (worldHue + (Math.random() * 120 - 60)) % 360;
@@ -598,9 +602,9 @@ export function createCosmicEffects(scene: Phaser.Scene, W: number, H: number, w
   }
 
   // 3. Shooting Stars (Comets)
-  for (let i = 0; i < 3; i++) {
-    const x = Math.random() * W;
-    const y = Math.random() * H * 0.3;
+  for (let i = 0; i < 4; i++) {
+    const x = startX + Math.random() * oW;
+    const y = startY + Math.random() * oH * 0.3;
     gfx.lineStyle(3, 0xffffff, 0.8);
     gfx.beginPath();
     gfx.moveTo(x, y);
@@ -619,4 +623,6 @@ export function createCosmicEffects(scene: Phaser.Scene, W: number, H: number, w
     targets: gfx, alpha: { from: 0.7, to: 1 },
     duration: 1500, yoyo: true, repeat: -1, ease: 'Sine.InOut'
   });
+
+  return gfx;
 }
