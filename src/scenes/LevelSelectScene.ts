@@ -267,7 +267,7 @@ export class LevelSelectScene extends Phaser.Scene {
       const tPt = (px: number, py: number) => transformer(px, py);
 
       // Render block
-      drawIsoCube(g, cx, cy, topCol, leftCol, rightCol, glowCol, node.unlocked ? 0.65 : 0.25, transformer);
+      drawIsoCube(g, cx, cy, topCol, leftCol, rightCol, glowCol, node.unlocked ? 0.65 : 0.25, transformer, this.worldIndex, this.time.now);
 
       // ── Overlay: reposition pre-created text objects ───────────────
       if (node.unlocked) {

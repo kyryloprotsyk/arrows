@@ -251,6 +251,191 @@ class AudioManager {
     this.bgmOsc.forEach(o => { try { o.stop(); } catch { } });
     this.bgmOsc = [];
   }
+
+  playMaterialLaunch(worldIndex: number) {
+    this.play(ctx => {
+      const now = ctx.currentTime;
+      switch (worldIndex) {
+        case 1: { // Jelly
+          const o = ctx.createOscillator(); const g = ctx.createGain();
+          o.connect(g); g.connect(ctx.destination);
+          o.type = 'sine';
+          o.frequency.setValueAtTime(320, now);
+          o.frequency.exponentialRampToValueAtTime(750, now + 0.14);
+          g.gain.setValueAtTime(0.20, now);
+          g.gain.exponentialRampToValueAtTime(0.001, now + 0.20);
+          o.start(); o.stop(now + 0.20);
+          break;
+        }
+        case 2: { // Wood
+          const o = ctx.createOscillator(); const g = ctx.createGain();
+          o.connect(g); g.connect(ctx.destination);
+          o.type = 'triangle';
+          o.frequency.setValueAtTime(200, now);
+          o.frequency.exponentialRampToValueAtTime(80, now + 0.08);
+          g.gain.setValueAtTime(0.25, now);
+          g.gain.exponentialRampToValueAtTime(0.001, now + 0.09);
+          o.start(); o.stop(now + 0.10);
+          break;
+        }
+        case 3: { // Iron/Metal
+          [650, 950, 1400].forEach((freq, idx) => {
+            const o = ctx.createOscillator(); const g = ctx.createGain();
+            o.connect(g); g.connect(ctx.destination);
+            o.type = idx === 0 ? 'triangle' : 'sine';
+            o.frequency.setValueAtTime(freq, now);
+            o.frequency.linearRampToValueAtTime(freq * 0.95, now + 0.25);
+            g.gain.setValueAtTime(0.12, now);
+            g.gain.exponentialRampToValueAtTime(0.001, now + 0.26);
+            o.start(); o.stop(now + 0.26);
+          });
+          break;
+        }
+        case 4: { // Water
+          const o = ctx.createOscillator(); const g = ctx.createGain();
+          o.connect(g); g.connect(ctx.destination);
+          o.type = 'sine';
+          o.frequency.setValueAtTime(500, now);
+          o.frequency.exponentialRampToValueAtTime(1300, now + 0.16);
+          g.gain.setValueAtTime(0.18, now);
+          g.gain.exponentialRampToValueAtTime(0.001, now + 0.17);
+          o.start(); o.stop(now + 0.17);
+          break;
+        }
+        case 5: { // Ice
+          // High chime
+          [1200, 1600].forEach((freq) => {
+            const o = ctx.createOscillator(); const g = ctx.createGain();
+            o.connect(g); g.connect(ctx.destination);
+            o.type = 'sine';
+            o.frequency.setValueAtTime(freq, now);
+            o.frequency.exponentialRampToValueAtTime(freq + 400, now + 0.05);
+            o.frequency.exponentialRampToValueAtTime(freq * 0.5, now + 0.20);
+            g.gain.setValueAtTime(0.10, now);
+            g.gain.exponentialRampToValueAtTime(0.001, now + 0.22);
+            o.start(); o.stop(now + 0.22);
+          });
+          // Short crack noise
+          const size = ctx.sampleRate * 0.06;
+          const buf = ctx.createBuffer(1, size, ctx.sampleRate);
+          const data = buf.getChannelData(0);
+          for (let i = 0; i < size; i++) data[i] = Math.random() * 2 - 1;
+          const src = ctx.createBufferSource(); src.buffer = buf;
+          const flt = ctx.createBiquadFilter(); flt.type = 'highpass'; flt.frequency.value = 3000;
+          const g2 = ctx.createGain();
+          src.connect(flt); flt.connect(g2); g2.connect(ctx.destination);
+          g2.gain.setValueAtTime(0.15, now);
+          g2.gain.exponentialRampToValueAtTime(0.001, now + 0.06);
+          src.start(); src.stop(now + 0.06);
+          break;
+        }
+        case 6: { // Magma/Obsidian
+          // Low thump
+          const o = ctx.createOscillator(); const g = ctx.createGain();
+          o.connect(g); g.connect(ctx.destination);
+          o.type = 'sawtooth';
+          o.frequency.setValueAtTime(120, now);
+          o.frequency.exponentialRampToValueAtTime(30, now + 0.22);
+          g.gain.setValueAtTime(0.28, now);
+          g.gain.exponentialRampToValueAtTime(0.001, now + 0.25);
+          o.start(); o.stop(now + 0.25);
+
+          // Explosive noise
+          const size = ctx.sampleRate * 0.25;
+          const buf = ctx.createBuffer(1, size, ctx.sampleRate);
+          const data = buf.getChannelData(0);
+          for (let i = 0; i < size; i++) data[i] = Math.random() * 2 - 1;
+          const src = ctx.createBufferSource(); src.buffer = buf;
+          const flt = ctx.createBiquadFilter(); flt.type = 'lowpass'; flt.frequency.value = 450;
+          const g2 = ctx.createGain();
+          src.connect(flt); flt.connect(g2); g2.connect(ctx.destination);
+          g2.gain.setValueAtTime(0.35, now);
+          g2.gain.exponentialRampToValueAtTime(0.001, now + 0.24);
+          src.start(); src.stop(now + 0.25);
+          break;
+        }
+        default:
+          this.playLaunch();
+      }
+    });
+  }
+
+  playMaterialBump(worldIndex: number) {
+    this.play(ctx => {
+      const now = ctx.currentTime;
+      switch (worldIndex) {
+        case 1: { // Jelly bump: low-pitch soft wiggle
+          const o = ctx.createOscillator(); const g = ctx.createGain();
+          o.connect(g); g.connect(ctx.destination);
+          o.type = 'sine';
+          o.frequency.setValueAtTime(150, now);
+          o.frequency.exponentialRampToValueAtTime(220, now + 0.08);
+          o.frequency.exponentialRampToValueAtTime(100, now + 0.16);
+          g.gain.setValueAtTime(0.18, now);
+          g.gain.exponentialRampToValueAtTime(0.001, now + 0.16);
+          o.start(); o.stop(now + 0.16);
+          break;
+        }
+        case 2: { // Wood bump: dry percussive knock
+          const o = ctx.createOscillator(); const g = ctx.createGain();
+          o.connect(g); g.connect(ctx.destination);
+          o.type = 'triangle';
+          o.frequency.setValueAtTime(140, now);
+          o.frequency.setValueAtTime(90, now + 0.03);
+          g.gain.setValueAtTime(0.20, now);
+          g.gain.exponentialRampToValueAtTime(0.001, now + 0.06);
+          o.start(); o.stop(now + 0.06);
+          break;
+        }
+        case 3: { // Iron bump: metallic click
+          const o = ctx.createOscillator(); const g = ctx.createGain();
+          o.connect(g); g.connect(ctx.destination);
+          o.type = 'triangle';
+          o.frequency.setValueAtTime(600, now);
+          o.frequency.setValueAtTime(450, now + 0.03);
+          o.frequency.setValueAtTime(800, now + 0.06);
+          g.gain.setValueAtTime(0.12, now);
+          g.gain.exponentialRampToValueAtTime(0.001, now + 0.08);
+          o.start(); o.stop(now + 0.08);
+          break;
+        }
+        case 4: { // Water bump: wet bloop
+          const o = ctx.createOscillator(); const g = ctx.createGain();
+          o.connect(g); g.connect(ctx.destination);
+          o.type = 'sine';
+          o.frequency.setValueAtTime(400, now);
+          o.frequency.exponentialRampToValueAtTime(250, now + 0.10);
+          g.gain.setValueAtTime(0.14, now);
+          g.gain.exponentialRampToValueAtTime(0.001, now + 0.10);
+          o.start(); o.stop(now + 0.10);
+          break;
+        }
+        case 5: { // Ice bump: tiny glassy tick
+          const o = ctx.createOscillator(); const g = ctx.createGain();
+          o.connect(g); g.connect(ctx.destination);
+          o.type = 'sine';
+          o.frequency.setValueAtTime(2000, now);
+          g.gain.setValueAtTime(0.08, now);
+          g.gain.exponentialRampToValueAtTime(0.001, now + 0.04);
+          o.start(); o.stop(now + 0.04);
+          break;
+        }
+        case 6: { // Magma bump: low heavy thud
+          const o = ctx.createOscillator(); const g = ctx.createGain();
+          o.connect(g); g.connect(ctx.destination);
+          o.type = 'triangle';
+          o.frequency.setValueAtTime(90, now);
+          o.frequency.exponentialRampToValueAtTime(40, now + 0.15);
+          g.gain.setValueAtTime(0.24, now);
+          g.gain.exponentialRampToValueAtTime(0.001, now + 0.15);
+          o.start(); o.stop(now + 0.15);
+          break;
+        }
+        default:
+          this.playBump();
+      }
+    });
+  }
 }
 
 export const audio = new AudioManager();

@@ -485,7 +485,7 @@ export class MenuScene extends Phaser.Scene {
     const scaleX = scalePara * Math.abs(cos) + scalePerp * Math.abs(sin);
     const scaleY = scalePara * Math.abs(sin) + scalePerp * Math.abs(cos);
 
-    drawIsoCube(g, cx, cy, pal.top, pal.left, pal.right, pal.glow, 0.72, giantTransformer);
+    drawIsoCube(g, cx, cy, pal.top, pal.left, pal.right, pal.glow, 0.72, giantTransformer, 1, this.time.now);
 
     // Draw face
     const eyeY = cy - th * 0.15;

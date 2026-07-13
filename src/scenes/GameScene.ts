@@ -87,6 +87,7 @@ export class GameScene extends Phaser.Scene {
   private boomEmitter!: Phaser.GameObjects.Particles.ParticleEmitter;
   private shatterEmitter!: Phaser.GameObjects.Particles.ParticleEmitter;
   private confettiEmitter!: Phaser.GameObjects.Particles.ParticleEmitter;
+  private materialShatterEmitters!: Record<number, Array<{ emitter: Phaser.GameObjects.Particles.ParticleEmitter, count: number }>>;
 
   // ── HUD ───────────────────────────────────────────────────────────────
   private hudCoins!: Phaser.GameObjects.Text;
@@ -424,7 +425,7 @@ export class GameScene extends Phaser.Scene {
   // ═══════════════════════════════════════════════════════════════════════
   private attemptEscape(buddy: BuddyBlock) {
     if (buddy.state === 'locked') {
-      audio.playBump();
+      audio.playMaterialBump(this.worldIndex);
       this.showMsg('🔒 This chest is locked! Find the Key first!');
       buddy.state = 'bump';
       buddy.animT = 0;
@@ -460,12 +461,12 @@ export class GameScene extends Phaser.Scene {
 
     if (buddy.type === 'rainbow') {
       const freeDir = this.findFreeDirection(buddy);
-      if (!freeDir) { audio.playBump(); this.startBump(buddy); return; }
+      if (!freeDir) { audio.playMaterialBump(this.worldIndex); this.startBump(buddy); return; }
       escDir = freeDir;
     } else {
       const check = this.checkEscapePath(buddy, escDir);
       if (check.blocked) {
-        audio.playBump();
+        audio.playMaterialBump(this.worldIndex);
         this.startBump(buddy);
         return;
       }
@@ -621,7 +622,7 @@ export class GameScene extends Phaser.Scene {
     // Impact FX
     this.cameras.main.shake(120, 0.015);
     this.spawnShatterParticles(buddy);
-    audio.playLaunch();
+    audio.playMaterialLaunch(this.worldIndex);
   }
 
   private startBump(buddy: BuddyBlock) {
@@ -999,7 +1000,7 @@ export class GameScene extends Phaser.Scene {
     const scaleX = scalePara * Math.abs(cos) + scalePerp * Math.abs(sin);
     const scaleY = scalePara * Math.abs(sin) + scalePerp * Math.abs(cos);
 
-    drawIsoCube(g, cx, cy, top, left, right, glow, glowAlpha, transformer);
+    drawIsoCube(g, cx, cy, top, left, right, glow, glowAlpha, transformer, this.worldIndex, this.time.now);
 
     // Type-specific overlays
     const tw = TILE_W, th = TILE_H;
@@ -1276,7 +1277,7 @@ export class GameScene extends Phaser.Scene {
       emitting: false
     }).setDepth(2001);
 
-    // Shatter emitter (Geometric fragments)
+    // Shatter emitter (Geometric fragments - default fallback)
     this.shatterEmitter = this.add.particles(0, 0, 'block_particle', {
       speed: { min: 150, max: 400 },
       scale: { start: 1.5, end: 0 },
@@ -1298,6 +1299,127 @@ export class GameScene extends Phaser.Scene {
       gravityY: 200,
       emitting: false
     }).setDepth(10);
+
+    // ── Material-Specific Shatter Emitters ───────────────────────────────
+    // Jelly
+    const jellyShatter = this.add.particles(0, 0, 'star_particle', {
+      speed: { min: 80, max: 220 },
+      scale: { start: 1.8, end: 0 },
+      alpha: { start: 1, end: 0 },
+      lifespan: { min: 600, max: 900 },
+      angle: { min: 0, max: 360 },
+      blendMode: 'ADD',
+      gravityY: 100,
+      emitting: false
+    }).setDepth(2002);
+    jellyShatter.setParticleTint([0xff6eb4, 0xffaacc, 0xffffff]);
+
+    // Wood
+    const woodShatter = this.add.particles(0, 0, 'block_particle', {
+      speed: { min: 120, max: 320 },
+      scale: { start: 1.5, end: 0 },
+      alpha: { start: 1, end: 0 },
+      lifespan: { min: 350, max: 650 },
+      angle: { min: 0, max: 360 },
+      rotate: { min: 0, max: 720 },
+      gravityY: 600,
+      emitting: false
+    }).setDepth(2002);
+    woodShatter.setParticleTint([0x8b5a2b, 0xcd853f, 0xdeb887]);
+
+    // Metal (Metal shards & Sparks)
+    const metalShatter = this.add.particles(0, 0, 'block_particle', {
+      speed: { min: 100, max: 250 },
+      scale: { start: 1.5, end: 0 },
+      alpha: { start: 1, end: 0 },
+      lifespan: { min: 400, max: 800 },
+      angle: { min: 0, max: 360 },
+      gravityY: 500,
+      emitting: false
+    }).setDepth(2002);
+    metalShatter.setParticleTint([0x778899, 0x708090, 0xc0c0c0]);
+
+    const sparkShatter = this.add.particles(0, 0, 'particle', {
+      speed: { min: 250, max: 500 },
+      scale: { start: 1.2, end: 0 },
+      alpha: { start: 1, end: 0 },
+      lifespan: { min: 200, max: 400 },
+      angle: { min: 0, max: 360 },
+      blendMode: 'ADD',
+      gravityY: 0,
+      emitting: false
+    }).setDepth(2003);
+    sparkShatter.setParticleTint([0xffe000, 0xff6b00, 0xffffff]);
+
+    // Water (Droplets & Bubbles)
+    const waterShatter = this.add.particles(0, 0, 'star_particle', {
+      speed: { min: 130, max: 300 },
+      scale: { start: 1.5, end: 0 },
+      alpha: { start: 1, end: 0 },
+      lifespan: { min: 400, max: 800 },
+      angle: { min: 0, max: 360 },
+      gravityY: 300,
+      emitting: false
+    }).setDepth(2002);
+    waterShatter.setParticleTint([0x00d2ff, 0x74c0fc, 0xffffff]);
+
+    const bubbleShatter = this.add.particles(0, 0, 'star_particle', {
+      speed: { min: 40, max: 120 },
+      scale: { start: 1.3, end: 0.2 },
+      alpha: { start: 1, end: 0 },
+      lifespan: { min: 500, max: 900 },
+      angle: { min: 0, max: 360 },
+      gravityY: -250,
+      emitting: false
+    }).setDepth(2003);
+    bubbleShatter.setParticleTint([0xffffff, 0xe0f7fa]);
+
+    // Ice
+    const iceShatter = this.add.particles(0, 0, 'block_particle', {
+      speed: { min: 140, max: 380 },
+      scale: { start: 1.6, end: 0 },
+      alpha: { start: 1, end: 0 },
+      lifespan: { min: 400, max: 850 },
+      angle: { min: 0, max: 360 },
+      rotate: { min: 0, max: 720 },
+      blendMode: 'ADD',
+      gravityY: 450,
+      emitting: false
+    }).setDepth(2002);
+    iceShatter.setParticleTint([0x00ffff, 0xe0ffff, 0xffffff]);
+
+    // Magma (Obsidian & Embers)
+    const magmaShatter = this.add.particles(0, 0, 'block_particle', {
+      speed: { min: 120, max: 280 },
+      scale: { start: 1.5, end: 0 },
+      alpha: { start: 1, end: 0 },
+      lifespan: { min: 400, max: 800 },
+      angle: { min: 0, max: 360 },
+      gravityY: 500,
+      emitting: false
+    }).setDepth(2002);
+    magmaShatter.setParticleTint([0x1a1a1a, 0x333333, 0x4d4d4d]);
+
+    const emberShatter = this.add.particles(0, 0, 'star_particle', {
+      speed: { min: 80, max: 240 },
+      scale: { start: 1.4, end: 0 },
+      alpha: { start: 1, end: 0 },
+      lifespan: { min: 400, max: 800 },
+      angle: { min: 0, max: 360 },
+      blendMode: 'ADD',
+      gravityY: -180,
+      emitting: false
+    }).setDepth(2003);
+    emberShatter.setParticleTint([0xff3c00, 0xff9900, 0xffee00]);
+
+    this.materialShatterEmitters = {
+      1: [{ emitter: jellyShatter, count: 30 }],
+      2: [{ emitter: woodShatter, count: 25 }],
+      3: [{ emitter: metalShatter, count: 20 }, { emitter: sparkShatter, count: 25 }],
+      4: [{ emitter: waterShatter, count: 20 }, { emitter: bubbleShatter, count: 18 }],
+      5: [{ emitter: iceShatter, count: 32 }],
+      6: [{ emitter: magmaShatter, count: 20 }, { emitter: emberShatter, count: 25 }]
+    };
   }
 
   private getScreenPos(b: BuddyBlock): { x: number; y: number } {
@@ -1310,10 +1432,17 @@ export class GameScene extends Phaser.Scene {
 
   private spawnShatterParticles(b: BuddyBlock) {
     const { x, y } = this.getScreenPos(b);
-    const col = b.type === 'rainbow' ? hslToInt(b.rainbowHue * 360, 100, 80) : b.palGlow;
-    const col2 = b.palTop || col;
-    this.shatterEmitter.setParticleTint([col, col2, 0xffffff]);
-    this.shatterEmitter.explode(35, x, y);
+    const emitters = this.materialShatterEmitters[this.worldIndex];
+    if (emitters) {
+      emitters.forEach(item => {
+        item.emitter.explode(item.count, x, y);
+      });
+    } else {
+      const col = b.type === 'rainbow' ? hslToInt(b.rainbowHue * 360, 100, 80) : b.palGlow;
+      const col2 = b.palTop || col;
+      this.shatterEmitter.setParticleTint([col, col2, 0xffffff]);
+      this.shatterEmitter.explode(35, x, y);
+    }
   }
 
   private spawnBoomParticles(bsx: number, bsy: number) {

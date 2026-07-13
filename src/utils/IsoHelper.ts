@@ -100,7 +100,9 @@ export function drawIsoCube(
   topCol: number, leftCol: number, rightCol: number,
   glowCol: number,
   glowAlpha = 0.5,
-  transformer?: CoordTransformer
+  transformer?: CoordTransformer,
+  worldIndex = 1,
+  timeNow = 0
 ) {
   const tw = getTileW(), th = getTileH(), bh = getBlockH();
 
@@ -132,21 +134,233 @@ export function drawIsoCube(
     g.fillPath();
   };
 
+  // Helper: 2D linear interpolation
+  const lerp2D = (x1: number, y1: number, x2: number, y2: number, t: number) => ({
+    x: x1 + (x2 - x1) * t,
+    y: y1 + (y2 - y1) * t
+  });
+
+  // Determine material opacity and base colors
+  let faceAlpha = 1.0;
+  let actualTopCol = topCol;
+  let actualLeftCol = leftCol;
+  let actualRightCol = rightCol;
+
+  if (worldIndex === 4) { // Water
+    faceAlpha = 0.55;
+  } else if (worldIndex === 5) { // Ice
+    faceAlpha = 0.72;
+  } else if (worldIndex === 6) { // Magma/Obsidian (dark volcanic stone)
+    actualTopCol = 0x242424;
+    actualLeftCol = 0x191919;
+    actualRightCol = 0x0f0f0f;
+  }
+
   // Cel-shaded / Solid style: No transparent backfaces
   // Instead, we will draw thick black/dark outlines behind the block to act as ambient occlusion
   g.lineStyle(6, 0x000000, 0.4);
   fillPoly([topX, topY, rightX, rightY, rbX, rbY, bbX, bbY, lbX, lbY, leftX, leftY]);
   g.strokePath();
 
-  // Draw front visible faces (SOLID OPACITY) for high-contrast sharpness
-  g.fillStyle(rightCol, 1.0);
+  // Draw front visible faces with correct opacity
+  g.fillStyle(actualRightCol, faceAlpha);
   fillPoly([rightX, rightY, botX, botY, bbX, bbY, rbX, rbY]);
 
-  g.fillStyle(leftCol, 1.0);
+  g.fillStyle(actualLeftCol, faceAlpha);
   fillPoly([leftX, leftY, botX, botY, bbX, bbY, lbX, lbY]);
 
-  g.fillStyle(topCol, 1.0);
+  g.fillStyle(actualTopCol, faceAlpha === 1.0 ? 1.0 : Math.min(faceAlpha + 0.1, 1.0));
   fillPoly([topX, topY, rightX, rightY, botX, botY, leftX, leftY]);
+
+  // ── Procedural Material Overlays ───────────────────────────────────────
+  switch (worldIndex) {
+    case 1: { // Jelly Core (Concentric soft wobbly overlay)
+      const wobbleX = Math.sin(timeNow * 0.005 + cx) * 1.5;
+      const wobbleY = Math.cos(timeNow * 0.005 + cy) * 1.0;
+
+      // Top Face Jelly Core
+      const tcX = (topX + botX) / 2 + wobbleX;
+      const tcY = (topY + botY) / 2 + wobbleY;
+      const t0 = lerp2D(tcX, tcY, topX, topY, 0.58);
+      const t1 = lerp2D(tcX, tcY, rightX, rightY, 0.58);
+      const t2 = lerp2D(tcX, tcY, botX, botY, 0.58);
+      const t3 = lerp2D(tcX, tcY, leftX, leftY, 0.58);
+      g.fillStyle(0xffffff, 0.18);
+      fillPoly([t0.x, t0.y, t1.x, t1.y, t2.x, t2.y, t3.x, t3.y]);
+
+      // Left Face Jelly Core
+      const lcX = (leftX + botX + bbX + lbX) / 4 + wobbleX;
+      const lcY = (leftY + botY + bbY + lbY) / 4 + wobbleY;
+      const l0 = lerp2D(lcX, lcY, leftX, leftY, 0.6);
+      const l1 = lerp2D(lcX, lcY, botX, botY, 0.6);
+      const l2 = lerp2D(lcX, lcY, bbX, bbY, 0.6);
+      const l3 = lerp2D(lcX, lcY, lbX, lbY, 0.6);
+      g.fillStyle(0xffffff, 0.12);
+      fillPoly([l0.x, l0.y, l1.x, l1.y, l2.x, l2.y, l3.x, l3.y]);
+
+      // Right Face Jelly Core
+      const rcX = (rightX + botX + bbX + rbX) / 4 + wobbleX;
+      const rcY = (rightY + botY + bbY + rbY) / 4 + wobbleY;
+      const r0 = lerp2D(rcX, rcY, rightX, rightY, 0.6);
+      const r1 = lerp2D(rcX, rcY, botX, botY, 0.6);
+      const r2 = lerp2D(rcX, rcY, bbX, bbY, 0.6);
+      const r3 = lerp2D(rcX, rcY, rbX, rbY, 0.6);
+      g.fillStyle(0xffffff, 0.12);
+      fillPoly([r0.x, r0.y, r1.x, r1.y, r2.x, r2.y, r3.x, r3.y]);
+      break;
+    }
+
+    case 2: { // Wood Grain & Planks
+      g.lineStyle(1.5, 0x000000, 0.22);
+      // Top face grain lines
+      for (const t of [0.25, 0.5, 0.75]) {
+        const p1 = lerp2D(topX, topY, leftX, leftY, t);
+        const p2 = lerp2D(rightX, rightY, botX, botY, t);
+        g.beginPath(); g.moveTo(p1.x, p1.y); g.lineTo(p2.x, p2.y); g.strokePath();
+      }
+      // Left face plank lines
+      for (const t of [0.33, 0.66]) {
+        const p1 = lerp2D(leftX, leftY, botX, botY, t);
+        const p2 = lerp2D(lbX, lbY, bbX, bbY, t);
+        g.beginPath(); g.moveTo(p1.x, p1.y); g.lineTo(p2.x, p2.y); g.strokePath();
+      }
+      // Right face plank lines
+      for (const t of [0.33, 0.66]) {
+        const p1 = lerp2D(botX, botY, rightX, rightY, t);
+        const p2 = lerp2D(bbX, bbY, rbX, rbY, t);
+        g.beginPath(); g.moveTo(p1.x, p1.y); g.lineTo(p2.x, p2.y); g.strokePath();
+      }
+      break;
+    }
+
+    case 3: { // Cyber-Metal Reflection & Circuits
+      // Left face metallic chrome strip
+      const l1 = lerp2D(leftX, leftY, lbX, lbY, 0.4);
+      const l2 = lerp2D(botX, botY, bbX, bbY, 0.4);
+      const l3 = lerp2D(botX, botY, bbX, bbY, 0.52);
+      const l4 = lerp2D(leftX, leftY, lbX, lbY, 0.52);
+      g.fillStyle(0xffffff, 0.16);
+      fillPoly([l1.x, l1.y, l2.x, l2.y, l3.x, l3.y, l4.x, l4.y]);
+
+      // Right face metallic chrome strip
+      const r1 = lerp2D(botX, botY, bbX, bbY, 0.4);
+      const r2 = lerp2D(rightX, rightY, rbX, rbY, 0.4);
+      const r3 = lerp2D(rightX, rightY, rbX, rbY, 0.52);
+      const r4 = lerp2D(botX, botY, bbX, bbY, 0.52);
+      fillPoly([r1.x, r1.y, r2.x, r2.y, r3.x, r3.y, r4.x, r4.y]);
+
+      // Top face diagonal reflection
+      const t1 = lerp2D(topX, topY, leftX, leftY, 0.3);
+      const t2 = lerp2D(rightX, rightY, botX, botY, 0.55);
+      const t3 = lerp2D(rightX, rightY, botX, botY, 0.7);
+      const t4 = lerp2D(topX, topY, leftX, leftY, 0.45);
+      g.fillStyle(0xffffff, 0.22);
+      fillPoly([t1.x, t1.y, t2.x, t2.y, t3.x, t3.y, t4.x, t4.y]);
+
+      // Neon cyber circuit traces on top face
+      const tcX = (topX + botX) / 2;
+      const tcY = (topY + botY) / 2;
+      const end1 = lerp2D(leftX, leftY, topX, topY, 0.5);
+      const end2 = lerp2D(rightX, rightY, botX, botY, 0.5);
+
+      g.lineStyle(1.8, glowCol, 0.95);
+      g.beginPath(); g.moveTo(tcX, tcY); g.lineTo(end1.x, end1.y); g.strokePath();
+      g.beginPath(); g.moveTo(tcX, tcY); g.lineTo(end2.x, end2.y); g.strokePath();
+
+      g.fillStyle(glowCol, 1.0);
+      g.fillCircle(end1.x, end1.y, 2.5);
+      g.fillCircle(end2.x, end2.y, 2.5);
+      break;
+    }
+
+    case 4: { // Water Waves & Floating Bubbles
+      const waveOffset = Math.sin(timeNow * 0.005 + cx * 0.05) * 2.8;
+
+      // Left face water volume
+      const wl1 = lerp2D(leftX, leftY, lbX, lbY, 0.45);
+      const wl2 = lerp2D(botX, botY, bbX, bbY, 0.45);
+      wl1.y += waveOffset;
+      wl2.y += waveOffset;
+      g.fillStyle(0x00d2ff, 0.22);
+      fillPoly([wl1.x, wl1.y, wl2.x, wl2.y, bbX, bbY, lbX, lbY]);
+      g.lineStyle(1.5, 0xffffff, 0.35);
+      g.beginPath(); g.moveTo(wl1.x, wl1.y); g.lineTo(wl2.x, wl2.y); g.strokePath();
+
+      // Right face water volume
+      const wr1 = lerp2D(botX, botY, bbX, bbY, 0.45);
+      const wr2 = lerp2D(rightX, rightY, rbX, rbY, 0.45);
+      wr1.y += waveOffset;
+      wr2.y += waveOffset;
+      g.fillStyle(0x00d2ff, 0.22);
+      fillPoly([wr1.x, wr1.y, wr2.x, wr2.y, rbX, rbY, bbX, bbY]);
+      g.beginPath(); g.moveTo(wr1.x, wr1.y); g.lineTo(wr2.x, wr2.y); g.strokePath();
+
+      // Draw floating bubbles inside the liquid
+      const localH = bh + th;
+      const b1 = ((timeNow * 0.035) % localH);
+      const b2 = (((timeNow * 0.035) + localH / 2) % localH);
+      const bY1 = (cy + bh) - b1;
+      const bY2 = (cy + bh) - b2;
+
+      g.fillStyle(0xffffff, 0.65);
+      g.fillCircle(cx - tw * 0.45, bY1, 1.8);
+      g.fillCircle(cx + tw * 0.45, bY2, 2.2);
+      break;
+    }
+
+    case 5: { // Frosty Ice Cracks & Star Sparkle
+      g.lineStyle(1.5, 0xffffff, 0.55);
+      const tcX = (topX + botX) / 2;
+      const tcY = (topY + botY) / 2;
+
+      // Crack 1
+      const c1 = lerp2D(leftX, leftY, lbX, lbY, 0.5);
+      g.beginPath(); g.moveTo(tcX, tcY); g.lineTo(c1.x, c1.y); g.lineTo(lbX + 4, lbY - 6); g.strokePath();
+
+      // Crack 2
+      const c2 = lerp2D(rightX, rightY, botX, botY, 0.4);
+      g.beginPath(); g.moveTo(tcX, tcY); g.lineTo(c2.x, c2.y); g.lineTo(bbX - 6, bbY - 10); g.strokePath();
+
+      // Sparkle star on top vertex
+      g.lineStyle(1.5, 0xffffff, 0.95);
+      g.beginPath();
+      g.moveTo(topX, topY - 11); g.lineTo(topX, topY + 11);
+      g.moveTo(topX - 11, topY); g.lineTo(topX + 11, topY);
+      g.strokePath();
+      g.fillStyle(0xffffff, 1.0);
+      g.fillCircle(topX, topY, 2.5);
+      break;
+    }
+
+    case 6: { // Pulsing Molten Lava Cracks / Obsidian
+      const pulse = 0.4 + 0.6 * Math.sin(timeNow * 0.005);
+      const veinCol = hslToInt(15, 100, 50 + pulse * 20); // shifts red -> orange -> yellow
+
+      g.lineStyle(1.8 + pulse * 1.4, veinCol, 0.85);
+
+      // Top face jagged lava line
+      const midTop = lerp2D(topX, topY, botX, botY, 0.5);
+      midTop.x += Math.sin(cx) * 3; midTop.y += Math.cos(cy) * 2;
+      g.beginPath(); g.moveTo(topX, topY); g.lineTo(midTop.x, midTop.y); g.lineTo(botX, botY); g.strokePath();
+
+      // Left face jagged lava line
+      const midLeft = lerp2D(leftX, leftY, bbX, bbY, 0.55);
+      midLeft.x += Math.sin(cy) * 3;
+      g.beginPath(); g.moveTo(leftX, leftY); g.lineTo(midLeft.x, midLeft.y); g.lineTo(bbX, bbY); g.strokePath();
+
+      // Right face jagged lava line
+      const midRight = lerp2D(rightX, rightY, bbX, bbY, 0.45);
+      midRight.x += Math.cos(cx) * 3;
+      g.beginPath(); g.moveTo(rightX, rightY); g.lineTo(midRight.x, midRight.y); g.lineTo(bbX, bbY); g.strokePath();
+
+      // Hot core overlay (inner yellow line)
+      g.lineStyle(0.8, 0xffea00, 0.5 + pulse * 0.4);
+      g.beginPath(); g.moveTo(topX, topY); g.lineTo(midTop.x, midTop.y); g.lineTo(botX, botY); g.strokePath();
+      g.beginPath(); g.moveTo(leftX, leftY); g.lineTo(midLeft.x, midLeft.y); g.lineTo(bbX, bbY); g.strokePath();
+      g.beginPath(); g.moveTo(rightX, rightY); g.lineTo(midRight.x, midRight.y); g.lineTo(bbX, bbY); g.strokePath();
+      break;
+    }
+  }
 
   // Ambient Occlusion Shadows (Darken inner edges)
   g.lineStyle(4, 0x000000, 0.5);
@@ -160,7 +374,7 @@ export function drawIsoCube(
   g.strokePath();
 
   // Hard-edged Cel-Shading Gloss Highlights (Crisp vectors instead of soft gradients)
-  g.fillStyle(0xffffff, 0.4);
+  g.fillStyle(0xffffff, worldIndex === 6 ? 0.25 : 0.4); // slightly dimmer highlight on dark obsidian magma
   // Sharp angular highlight on top face
   fillPoly([
     topX, topY + 4,
@@ -170,7 +384,7 @@ export function drawIsoCube(
   ]);
 
   // Sharp bright bevel on the top-front edge
-  g.lineStyle(3, 0xffffff, 0.8);
+  g.lineStyle(3, 0xffffff, worldIndex === 6 ? 0.45 : 0.8);
   g.beginPath();
   g.moveTo(leftX + 2, leftY + 1);
   g.lineTo(botX, botY + 1);
