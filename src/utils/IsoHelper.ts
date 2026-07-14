@@ -1,4 +1,5 @@
 /* IsoHelper.ts — Isometric math & rendering utilities */
+import Phaser from 'phaser';
 
 // ── Responsive tile sizing ────────────────────────────────────────────────
 // Base sizes designed for a 375px-wide phone (iPhone SE).
@@ -91,6 +92,15 @@ function pointInPoly(px: number, py: number, poly: number[]): boolean {
 }
 
 
+export function blendColor(c1: number, c2: number, t: number): number {
+  const r1 = (c1 >> 16) & 0xff, g1 = (c1 >> 8) & 0xff, b1 = c1 & 0xff;
+  const r2 = (c2 >> 16) & 0xff, g2 = (c2 >> 8) & 0xff, b2 = c2 & 0xff;
+  const r = Math.round(r1 + (r2 - r1) * t);
+  const g = Math.round(g1 + (g2 - g1) * t);
+  const b = Math.round(b1 + (b2 - b1) * t);
+  return (r << 16) | (g << 8) | b;
+}
+
 export type CoordTransformer = (x: number, y: number) => { x: number; y: number };
 
 /** Draw a full isometric cube at (cx, cy) using Phaser Graphics API. */
@@ -162,14 +172,21 @@ export function drawIsoCube(
   fillPoly([topX, topY, rightX, rightY, rbX, rbY, bbX, bbY, lbX, lbY, leftX, leftY]);
   g.strokePath();
 
-  // Draw front visible faces with correct opacity
-  g.fillStyle(actualRightCol, faceAlpha);
+  // Draw front visible faces with linear gradients (lighter at top, darker at bottom)
+  const rightLight = blendColor(actualRightCol, 0xffffff, 0.12);
+  const rightDark  = blendColor(actualRightCol, 0x000000, 0.12);
+  g.fillGradientStyle(rightLight, rightLight, rightDark, rightDark, faceAlpha, faceAlpha, faceAlpha, faceAlpha);
   fillPoly([rightX, rightY, botX, botY, bbX, bbY, rbX, rbY]);
 
-  g.fillStyle(actualLeftCol, faceAlpha);
+  const leftLight = blendColor(actualLeftCol, 0xffffff, 0.12);
+  const leftDark  = blendColor(actualLeftCol, 0x000000, 0.12);
+  g.fillGradientStyle(leftLight, leftLight, leftDark, leftDark, faceAlpha, faceAlpha, faceAlpha, faceAlpha);
   fillPoly([leftX, leftY, botX, botY, bbX, bbY, lbX, lbY]);
 
-  g.fillStyle(actualTopCol, faceAlpha === 1.0 ? 1.0 : Math.min(faceAlpha + 0.1, 1.0));
+  const topAlpha = faceAlpha === 1.0 ? 1.0 : Math.min(faceAlpha + 0.1, 1.0);
+  const topLight = blendColor(actualTopCol, 0xffffff, 0.15);
+  const topDark  = blendColor(actualTopCol, 0x000000, 0.08);
+  g.fillGradientStyle(topLight, topLight, topDark, topDark, topAlpha, topAlpha, topAlpha, topAlpha);
   fillPoly([topX, topY, rightX, rightY, botX, botY, leftX, leftY]);
 
   // ── Procedural Material Overlays ───────────────────────────────────────
@@ -230,6 +247,13 @@ export function drawIsoCube(
         const p2 = lerp2D(bbX, bbY, rbX, rbY, t);
         g.beginPath(); g.moveTo(p1.x, p1.y); g.lineTo(p2.x, p2.y); g.strokePath();
       }
+
+      // Draw organic wood knot and concentric contours on top face
+      const tc = { x: (topX + botX)/2, y: (topY + botY)/2 };
+      g.fillStyle(0x000000, 0.16);
+      g.fillEllipse(tc.x + tw * 0.15, tc.y - th * 0.1, 5, 2.5);
+      g.lineStyle(1.2, 0x000000, 0.14);
+      g.strokeEllipse(tc.x + tw * 0.15, tc.y - th * 0.1, 10, 5);
       break;
     }
 
@@ -270,6 +294,19 @@ export function drawIsoCube(
       g.fillStyle(glowCol, 1.0);
       g.fillCircle(end1.x, end1.y, 2.5);
       g.fillCircle(end2.x, end2.y, 2.5);
+
+      // Steel rivets at 4 corners of Top face, offset slightly inwards
+      const tc = { x: (topX + botX)/2, y: (topY + botY)/2 };
+      const rivet1 = lerp2D(topX, topY, tc.x, tc.y, 0.15);
+      const rivet2 = lerp2D(leftX, leftY, tc.x, tc.y, 0.15);
+      const rivet3 = lerp2D(rightX, rightY, tc.x, tc.y, 0.15);
+      const rivet4 = lerp2D(botX, botY, tc.x, tc.y, 0.15);
+      [rivet1, rivet2, rivet3, rivet4].forEach(pt => {
+        g.fillStyle(0x333333, 0.95);
+        g.fillCircle(pt.x, pt.y, 2.4);
+        g.fillStyle(0xdddddd, 1.0);
+        g.fillCircle(pt.x, pt.y, 0.9);
+      });
       break;
     }
 
@@ -358,6 +395,25 @@ export function drawIsoCube(
       g.beginPath(); g.moveTo(topX, topY); g.lineTo(midTop.x, midTop.y); g.lineTo(botX, botY); g.strokePath();
       g.beginPath(); g.moveTo(leftX, leftY); g.lineTo(midLeft.x, midLeft.y); g.lineTo(bbX, bbY); g.strokePath();
       g.beginPath(); g.moveTo(rightX, rightY); g.lineTo(midRight.x, midRight.y); g.lineTo(bbX, bbY); g.strokePath();
+
+      // Real-time floating glowing volcanic embers rising upwards
+      for (let i = 0; i < 3; i++) {
+        const offsetHash = (cx * 13 + cy * 7 + i * 17) % 40;
+        const emberTime = (timeNow * 0.025 + offsetHash) % 30; // loop Y offset
+        const t = emberTime / 30; // 0 to 1
+        
+        const startPt = lerp2D(topX, topY, botX, botY, 0.25 + i * 0.25);
+        const emberX = startPt.x + Math.sin(timeNow * 0.005 + i) * 3.5;
+        const emberY = startPt.y - t * 26; // float up 26px
+        
+        const alpha = (1 - t) * 0.85;
+        const size = 1.4 + (1 - t) * 1.4;
+        
+        g.fillStyle(0xff5500, alpha);
+        g.fillCircle(emberX, emberY, size);
+        g.fillStyle(0xffea00, alpha * 0.95);
+        g.fillCircle(emberX, emberY, size * 0.5);
+      }
       break;
     }
   }
@@ -391,6 +447,14 @@ export function drawIsoCube(
   g.lineTo(rightX - 2, rightY + 1);
   g.strokePath();
 
+  // Very thin, semi-transparent white outline inside the top-front edge for glossy specular bevel reflection
+  g.lineStyle(1.2, 0xffffff, 0.4);
+  g.beginPath();
+  g.moveTo(leftX, leftY);
+  g.lineTo(botX, botY);
+  g.lineTo(rightX, rightY);
+  g.strokePath();
+
   // Inner glowing core (optional, maybe we keep it minimal since it's solid now)
   const scaleX = transformer ? Math.hypot(rightX - leftX, rightY - leftY) / (tw * 2) : 1;
   const scaleY = transformer ? Math.hypot(bbY - topY, bbX - topX) / (th * 2 + bh) : 1;
@@ -406,7 +470,8 @@ export function drawIsoCube(
     [lbX,lbY,    bbX,bbY], [rbX,rbY, bbX,bbY]
   ];
 
-  // Draw 4 concentric bloom passes for intense neon cartoon aesthetic
+  // Draw 4 concentric bloom passes for intense neon cartoon aesthetic using SCREEN blend mode
+  g.setBlendMode('SCREEN');
   for (let pass = 0; pass < 4; pass++) {
     const alpha = glowAlpha * [0.3, 0.5, 0.8, 1.0][pass];
     const width  = [12, 8, 4, 1.8][pass];
@@ -419,6 +484,7 @@ export function drawIsoCube(
       g.strokePath();
     }
   }
+  g.setBlendMode('NORMAL');
 
   // Soft base aura glow beneath block
   const baseAura = tPt(cx, cy + bh);
@@ -744,8 +810,36 @@ export function drawCartoonCosmicBg(g: Phaser.GameObjects.Graphics, W: number, H
   g.fillStyle(hslToInt(worldHue, 100, 80), 0.5);
   g.fillEllipse(W / 2, H * 0.45, W * 0.8, H * 0.15);
 
-  // 3. Synthwave Neon Grid Floor
+  // 2.5. Horizon Parallax Cartoon Mountain Silhouettes
   const horizonY = H * 0.45;
+
+  // Back distant mountain layer
+  g.fillStyle(hslToInt(worldHue, 60, 15), 0.7);
+  g.beginPath();
+  g.moveTo(0, H);
+  g.lineTo(0, horizonY);
+  for (let x = 0; x <= W + 40; x += 40) {
+    const hillY = horizonY - 14 - Math.sin(x * 0.009 + worldHue * 0.1) * 15 - Math.cos(x * 0.02) * 6;
+    g.lineTo(x, hillY);
+  }
+  g.lineTo(W, H);
+  g.closePath();
+  g.fillPath();
+
+  // Mid closer mountain/hill layer
+  g.fillStyle(hslToInt(worldHue, 75, 11), 0.96);
+  g.beginPath();
+  g.moveTo(0, H);
+  g.lineTo(0, horizonY);
+  for (let x = 0; x <= W + 40; x += 40) {
+    const hillY = horizonY - 4 - Math.cos(x * 0.013 - worldHue * 0.05) * 16 - Math.sin(x * 0.03) * 5;
+    g.lineTo(x, hillY);
+  }
+  g.lineTo(W, H);
+  g.closePath();
+  g.fillPath();
+
+  // 3. Synthwave Neon Grid Floor
   const vanishingX = W / 2;
   const gridCol = hslToInt(worldHue, 100, 75);
 
@@ -839,4 +933,136 @@ export function createCosmicEffects(scene: Phaser.Scene, W: number, H: number, w
   });
 
   return gfx;
+}
+
+/**
+ * Creates a professional, polished 3D cartoon-style button container.
+ * Clickable in the entire bounding box with tactile spring/wiggle feedback.
+ */
+export function createCartoonButton(
+  scene: Phaser.Scene,
+  x: number, y: number,
+  w: number, h: number,
+  text: string,
+  onClick: () => void,
+  options?: {
+    bgColor?: number;
+    shadowColor?: number;
+    textColor?: string;
+    fontSize?: number;
+    fontFamily?: string;
+    radius?: number;
+    depth?: number;
+  }
+): Phaser.GameObjects.Container {
+  const container = scene.add.container(x, y);
+  container.setDepth(options?.depth ?? 21);
+  container.setSize(w, h);
+  
+  // Entire button area hit zone
+  container.setInteractive(new Phaser.Geom.Rectangle(-w / 2, -h / 2, w, h), Phaser.Geom.Rectangle.Contains);
+  container.input!.cursor = 'pointer';
+
+  const bg = scene.add.graphics();
+  container.add(bg);
+
+  const fontSize = options?.fontSize ?? Math.round(h * 0.45);
+  const txt = scene.add.text(0, -2, text, {
+    fontFamily: options?.fontFamily ?? 'Orbitron',
+    fontSize: fontSize + 'px',
+    color: options?.textColor ?? '#ffffff',
+    stroke: '#000000',
+    strokeThickness: 2.2,
+    align: 'center'
+  }).setOrigin(0.5);
+  container.add(txt);
+
+  const faceCol = options?.bgColor ?? 0x9b72ff;
+  const shadowCol = options?.shadowColor ?? blendColor(faceCol, 0x000000, 0.4);
+  const r = options?.radius ?? 12;
+
+  const redraw = (state: 'idle' | 'hover' | 'pressed') => {
+    bg.clear();
+    
+    let faceY = -h / 2;
+    let shH = 6;
+    
+    if (state === 'pressed') {
+      faceY = -h / 2 + 4;
+      shH = 2;
+      txt.setY(2);
+    } else {
+      txt.setY(-2);
+    }
+
+    const faceBright = state === 'hover' ? blendColor(faceCol, 0xffffff, 0.15) : faceCol;
+
+    // 1. Draw 3D shadow/thickness (Darker bottom layer)
+    bg.fillStyle(shadowCol, 1);
+    bg.fillRoundedRect(-w / 2, -h / 2 + shH, w, h, r);
+
+    // 2. Draw Main top face
+    bg.fillStyle(faceBright, 1);
+    bg.fillRoundedRect(-w / 2, faceY, w, h, r);
+
+    // 3. Highlight Bevel
+    bg.lineStyle(1.8, 0xffffff, 0.4);
+    bg.beginPath();
+    bg.moveTo(-w / 2 + r, faceY + 1.2);
+    bg.lineTo(w / 2 - r, faceY + 1.2);
+    bg.strokePath();
+  };
+
+  redraw('idle');
+
+  container.on('pointerover', () => {
+    redraw('hover');
+    scene.tweens.add({
+      targets: container,
+      scaleX: 1.05,
+      scaleY: 1.05,
+      duration: 100,
+      ease: 'Quad.Out',
+      overwrite: true
+    });
+  });
+
+  container.on('pointerout', () => {
+    redraw('idle');
+    scene.tweens.add({
+      targets: container,
+      scaleX: 1.0,
+      scaleY: 1.0,
+      duration: 100,
+      ease: 'Quad.Out',
+      overwrite: true
+    });
+  });
+
+  container.on('pointerdown', () => {
+    redraw('pressed');
+    scene.tweens.add({
+      targets: container,
+      scaleX: 0.96,
+      scaleY: 0.96,
+      duration: 50,
+      ease: 'Quad.Out',
+      overwrite: true
+    });
+  });
+
+  container.on('pointerup', () => {
+    redraw('hover');
+    scene.tweens.add({
+      targets: container,
+      scaleX: 1.05,
+      scaleY: 1.05,
+      duration: 80,
+      ease: 'Quad.Out',
+      overwrite: true
+    });
+    onClick();
+  });
+
+  return container;
 }

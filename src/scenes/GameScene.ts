@@ -2,9 +2,11 @@
 import Phaser from 'phaser';
 import {
   TILE_W, TILE_H,
+  getTileW, getTileH, getBlockH,
   gridToScreen, getDrawDepth, isPointInBlock,
   drawIsoCube, getBlockPalette, hslToInt, drawHat,
-  drawCartoonCosmicBg, createCosmicEffects
+  drawCartoonCosmicBg, createCosmicEffects, blendColor,
+  createCartoonButton
 } from '../utils/IsoHelper';
 import { levelGenerator } from '../levelGenerator';
 import type { BlockConfig, LevelData } from '../levelGenerator';
@@ -48,6 +50,13 @@ export class GameScene extends Phaser.Scene {
   private levelData!: LevelData;
   private buddies: BuddyBlock[] = [];
   private rotState = 0; // 0-3: 90° steps
+  private hoveredBuddy: BuddyBlock | null = null;
+  private levelGridCoords: { x: number; z: number }[] = [];
+  private weatherParticles: {
+    x: number; y: number; vx: number; vy: number;
+    size: number; alpha: number; angle: number; angleSpeed: number;
+  }[] = [];
+  private shakeIntensity = 0;
   private coins = 0;
   private movesLeft = 0;
   private movesTotal = 0;
@@ -81,6 +90,7 @@ export class GameScene extends Phaser.Scene {
   private blockGfx!: Phaser.GameObjects.Graphics;
   private bgGfx!: Phaser.GameObjects.Graphics;
   private cosmicGfx!: Phaser.GameObjects.Graphics;
+  private weatherGfx!: Phaser.GameObjects.Graphics;
 
   // ── Particles ─────────────────────────────────────────────────────────  // 🌟 Particles 🌟
   private trailEmitter!: Phaser.GameObjects.Particles.ParticleEmitter;
@@ -128,6 +138,7 @@ export class GameScene extends Phaser.Scene {
 
     // Graphics layers
     this.blockGfx = this.add.graphics().setDepth(5);
+    this.weatherGfx = this.add.graphics().setDepth(10);
 
     // Particles
     this.setupParticles();
@@ -164,6 +175,12 @@ export class GameScene extends Phaser.Scene {
   private loadLevel(world: number, level: number) {
     this.worldIndex = world; this.levelIndex = level;
     this.levelData = levelGenerator.generateLevel(world, level);
+    this.levelGridCoords = [];
+    for (const b of this.levelData.blocks) {
+      if (!this.levelGridCoords.some(c => c.x === b.x && c.z === b.z)) {
+        this.levelGridCoords.push({ x: b.x, z: b.z });
+      }
+    }
     this.movesLeft = this.movesTotal = this.levelData.moveLimit;
     this.parTotal = this.levelData.par;
     this.comboCount = 0;
@@ -429,6 +446,7 @@ export class GameScene extends Phaser.Scene {
       this.showMsg('🔒 This chest is locked! Find the Key first!');
       buddy.state = 'bump';
       buddy.animT = 0;
+      this.triggerScreenShake();
       buddy.bumpDx = 5; buddy.bumpDy = 0;
       buddy.jellyDirX = 1; buddy.jellyDirY = 0; buddy.jellyAngle = 0;
       this.triggerHaptic(30);
@@ -449,6 +467,7 @@ export class GameScene extends Phaser.Scene {
       audio.playTap();
       buddy.state = 'bump';
       buddy.animT = 0;
+      this.triggerScreenShake();
       buddy.bumpDx = 0; buddy.bumpDy = -4; // small vertical wiggle
       buddy.jellyDirX = 0; buddy.jellyDirY = 1;
       buddy.jellyAngle = Math.PI / 2;
@@ -628,6 +647,7 @@ export class GameScene extends Phaser.Scene {
   private startBump(buddy: BuddyBlock) {
     buddy.state = 'bump';
     buddy.animT = 0;
+    this.triggerScreenShake();
     const sc = gridToScreen(buddy.x + buddy.dir.x, buddy.y + buddy.dir.y, buddy.z + buddy.dir.z, this.rotState);
     const base = gridToScreen(buddy.x, buddy.y, buddy.z, this.rotState);
     buddy.bumpDx = (sc.x - base.x) * 0.22;
@@ -665,6 +685,7 @@ export class GameScene extends Phaser.Scene {
         // Trigger a wiggle bounce in place
         b.state = 'bump';
         b.animT = 0;
+        this.triggerScreenShake();
         b.bumpDx = 0; b.bumpDy = 0;
         b.jellyDirX = 0; b.jellyDirY = 1;
         b.jellyAngle = Math.PI / 2;
@@ -720,6 +741,67 @@ export class GameScene extends Phaser.Scene {
   update(_time: number, delta: number) {
     const dt = Math.min(delta / 1000, 0.1);
 
+    // Screen shake decay
+    if (this.shakeIntensity > 0) {
+      this.shakeIntensity = Math.max(0, this.shakeIntensity - dt * 50);
+    }
+
+    // Weather particle update
+    const W = this.scale.width;
+    const H = this.scale.height;
+    if (!this.weatherParticles || this.weatherParticles.length === 0) {
+      for (let i = 0; i < 40; i++) {
+        this.weatherParticles.push({
+          x: Math.random() * W,
+          y: Math.random() * H,
+          vx: 0,
+          vy: 0,
+          size: 2 + Math.random() * 3,
+          alpha: 0.3 + Math.random() * 0.5,
+          angle: Math.random() * Math.PI * 2,
+          angleSpeed: -1 + Math.random() * 2
+        });
+      }
+    }
+
+    for (const p of this.weatherParticles) {
+      if (this.worldIndex === 1) { // Jelly wobbly bubbles rising
+        p.vx = Math.sin(_time * 0.003 + p.y) * 12;
+        p.vy = -35 - p.size * 5;
+      } else if (this.worldIndex === 2) { // Forest leaves falling and swaying
+        p.vx = 25 + Math.sin(_time * 0.002) * 10;
+        p.vy = 40 + p.size * 6;
+        p.angle += p.angleSpeed * dt;
+      } else if (this.worldIndex === 3) { // Cyber lines straight down
+        p.vx = 0;
+        p.vy = 90 + p.size * 12;
+      } else if (this.worldIndex === 4) { // Rain fast diagonal
+        p.vx = 15;
+        p.vy = 160 + p.size * 18;
+      } else if (this.worldIndex === 5) { // Ice snow diagonal drift
+        p.vx = Math.sin(_time * 0.0025 + p.y * 0.01) * 12;
+        p.vy = 30 + p.size * 4;
+      } else { // Magma embers rising
+        p.vx = Math.sin(_time * 0.0035 + p.y) * 8;
+        p.vy = -28 - p.size * 4;
+      }
+
+      p.x += p.vx * dt;
+      p.y += p.vy * dt;
+
+      // Wrap boundaries screen-space
+      if (p.vy < 0) {
+        if (p.y < -20) { p.y = H + 10; p.x = Math.random() * W; }
+      } else {
+        if (p.y > H + 20) { p.y = -10; p.x = Math.random() * W; }
+      }
+      if (p.vx < 0) {
+        if (p.x < -20) { p.x = W + 10; }
+      } else if (p.vx > 0) {
+        if (p.x > W + 20) { p.x = -10; }
+      }
+    }
+
     // Smooth pan & zoom — frame-rate independent (τ = time-constant in seconds)
     // Equivalent to CSS: transition: all 0.12s ease-out
     const panDecay  = 1 - Math.exp(-dt / 0.12);
@@ -738,7 +820,7 @@ export class GameScene extends Phaser.Scene {
     const wx = (pointer.x - this.centerX) / this.camZoom - this.panX;
     const wy = (pointer.y - this.centerY) / this.camZoom - this.panY;
 
-    let hoveredBuddy: BuddyBlock | null = null;
+    this.hoveredBuddy = null;
     const hudHCheck = Math.max(44, Math.min(this.scale.width, this.scale.height) * 0.12);
     if (pointer.active && pointer.y >= hudHCheck) {
       const sorted = [...this.buddies]
@@ -746,7 +828,7 @@ export class GameScene extends Phaser.Scene {
         .sort((a, b2) => b2.depth - a.depth);
       for (const buddy of sorted) {
         if (isPointInBlock(wx, wy, buddy.sx, buddy.sy)) {
-          hoveredBuddy = buddy;
+          this.hoveredBuddy = buddy;
           break;
         }
       }
@@ -757,7 +839,7 @@ export class GameScene extends Phaser.Scene {
     for (const b of this.buddies) {
       b.animT += dt;
 
-      const isHovered = (hoveredBuddy === b);
+      const isHovered = (this.hoveredBuddy === b);
 
       if (b.type === 'rainbow') b.rainbowHue = (b.rainbowHue + dt * 0.4) % 1;
 
@@ -871,6 +953,12 @@ export class GameScene extends Phaser.Scene {
     this.draw();
   }
 
+  private triggerScreenShake() {
+    const intensities = [4, 10, 18, 6, 12, 22]; // Jelly, Wood, Iron, Water, Ice, Magma
+    const idx = Math.max(1, Math.min(6, this.worldIndex)) - 1;
+    this.shakeIntensity = intensities[idx];
+  }
+
   private applyGravity() {
     let changed = true;
     while (changed) {
@@ -898,6 +986,7 @@ export class GameScene extends Phaser.Scene {
           b.animT = 0;
           b.bumpDx = 0;
           b.bumpDy = 15; // Visual drop bounce
+          this.triggerScreenShake();
           
           this.triggerHaptic(20);
         }
@@ -912,9 +1001,25 @@ export class GameScene extends Phaser.Scene {
     const g = this.blockGfx;
     g.clear();
 
-    // Apply camera transform manually for block graphics
-    g.setPosition(this.centerX + this.panX, this.centerY + this.panY);
+    // 1. Compute screen shake offsets
+    let shakeOffsetX = 0;
+    let shakeOffsetY = 0;
+    if (this.shakeIntensity > 0) {
+      shakeOffsetX = (Math.random() - 0.5) * this.shakeIntensity;
+      shakeOffsetY = (Math.random() - 0.5) * this.shakeIntensity;
+    }
+
+    // Apply camera transform manually with shake offsets
+    g.setPosition(this.centerX + this.panX + shakeOffsetX, this.centerY + this.panY + shakeOffsetY);
     g.setScale(this.camZoom);
+
+    // Pass -1: Draw the 3D floating island platform
+    this.drawFloatingIsland(g);
+
+    // Pass 0: Draw all grounded drop shadows
+    for (const b of this.buddies) {
+      this.drawDropShadow(g, b);
+    }
 
     // Pass 1: Draw all solid cubes, hats, faces
     for (const b of this.buddies) {
@@ -942,6 +1047,151 @@ export class GameScene extends Phaser.Scene {
           return { x: cx + dxPrime, y: (cy + 21) + dyPrime };
         };
         this.drawArrowIndicator(g, b, cx, cy, transformer);
+      }
+    }
+
+    // 3. Draw screen-space cartoon weather overlay on top
+    if (this.weatherGfx) {
+      this.weatherGfx.clear();
+      this.drawWeather(this.weatherGfx);
+    }
+  }
+
+  private drawDropShadow(g: Phaser.GameObjects.Graphics, b: BuddyBlock) {
+    if (b.state === 'escaping') return;
+
+    const floorPos = gridToScreen(b.x, 0, b.z, this.rotState);
+    const tw = getTileW(), th = getTileH(), bh = getBlockH();
+
+    // Height offset in screen space
+    const diffY = Math.max(0, floorPos.y - b.sy);
+    const scale = Math.max(0.2, 1 - diffY / 300);
+    const alpha = 0.25 * scale;
+
+    g.fillStyle(0x000000, alpha);
+    g.fillEllipse(floorPos.x, floorPos.y + bh + th, tw * 1.55 * scale, th * 1.55 * scale);
+  }
+
+  private drawFloatingIsland(g: Phaser.GameObjects.Graphics) {
+    if (!this.levelGridCoords || this.levelGridCoords.length === 0) return;
+
+    // Sort footprint coordinates by depth
+    const sorted = [...this.levelGridCoords].sort((a, b) => {
+      return getDrawDepth(a.x, 0, a.z, this.rotState) - getDrawDepth(b.x, 0, b.z, this.rotState);
+    });
+
+    const tw = getTileW(), th = getTileH(), bh = getBlockH();
+    const sh = 15; // vertical thickness of the 3D dirt chunk slab
+
+    // Theme color palettes
+    let topCol = 0x8be9fd;
+    let sideCol1 = 0x6272a4;
+    let sideCol2 = 0x44475a;
+
+    if (this.worldIndex === 1) { // Jelly
+      topCol = 0xff79c6; sideCol1 = 0xbd93f9; sideCol2 = 0x9a6bf0;
+    } else if (this.worldIndex === 2) { // Forest (Grass Top + Mud sides)
+      topCol = 0x49e26a; sideCol1 = 0x82542a; sideCol2 = 0x5a391c;
+    } else if (this.worldIndex === 3) { // Cyber (Steel Panel + Neon edges)
+      topCol = 0x1f2330; sideCol1 = 0x00d8e8; sideCol2 = 0x008da0;
+    } else if (this.worldIndex === 4) { // Water (Coral Top + Deep ocean sides)
+      topCol = 0x5cd0f0; sideCol1 = 0x0078b8; sideCol2 = 0x005280;
+    } else if (this.worldIndex === 5) { // Ice (White Snow + Crystal ice sides)
+      topCol = 0xf0f7fc; sideCol1 = 0x82c8ea; sideCol2 = 0x5aa8ca;
+    } else if (this.worldIndex === 6) { // Magma (Obsidian top + glowing lava sides)
+      topCol = 0x22242e; sideCol1 = 0xff3b3b; sideCol2 = 0xaa1a1a;
+    }
+
+    const fillPoly = (coords: number[]) => {
+      g.beginPath();
+      g.moveTo(coords[0], coords[1]);
+      for (let i = 2; i < coords.length; i += 2) g.lineTo(coords[i], coords[i + 1]);
+      g.closePath();
+      g.fillPath();
+    };
+
+    for (const c of sorted) {
+      const pos = gridToScreen(c.x, 0, c.z, this.rotState);
+      const cx = pos.x, cy = pos.y + bh + th;
+
+      // Slabs top vertices
+      const tx = cx, ty = cy - th;
+      const lx = cx - tw, ly = cy;
+      const rx = cx + tw, ry = cy;
+      const bx = cx, by = cy + th;
+
+      // Left face (soil side)
+      g.fillStyle(sideCol2, 1.0);
+      fillPoly([lx, ly, bx, by, bx, by + sh, lx, ly + sh]);
+
+      // Right face (soil side)
+      g.fillStyle(sideCol1, 1.0);
+      fillPoly([bx, by, rx, ry, rx, ry + sh, bx, by + sh]);
+
+      // Top face with linear gradient
+      const topLight = blendColor(topCol, 0xffffff, 0.16);
+      const topDark  = blendColor(topCol, 0x000000, 0.10);
+      g.fillGradientStyle(topLight, topLight, topDark, topDark, 1.0, 1.0, 1.0, 1.0);
+      fillPoly([tx, ty, rx, ry, bx, by, lx, ly]);
+
+      // Grid line borders
+      g.lineStyle(1.4, 0x000000, 0.15);
+      g.beginPath();
+      g.moveTo(tx, ty); g.lineTo(lx, ly); g.lineTo(bx, by); g.lineTo(rx, ry); g.closePath();
+      g.strokePath();
+
+      // Stylized visual decal overlays
+      if (this.worldIndex === 2) { // Forest: little flowers
+        g.fillStyle(0xffea00, 0.6);
+        g.fillCircle(cx - tw * 0.35, cy - th * 0.15, 1.8);
+        g.fillStyle(0xff3366, 0.6);
+        g.fillCircle(cx + tw * 0.25, cy + th * 0.25, 2.0);
+      } else if (this.worldIndex === 3) { // Cyber: circuit line traces
+        g.lineStyle(1.2, 0x00f0ff, 0.35);
+        g.beginPath();
+        g.moveTo(tx, ty + 3); g.lineTo(bx, by - 3);
+        g.strokePath();
+      } else if (this.worldIndex === 6) { // Magma: volcanic glowing veins
+        g.lineStyle(1.5, 0xff5500, 0.6);
+        g.beginPath();
+        g.moveTo(lx + 6, ly + 2); g.lineTo(rx - 6, ry - 2);
+        g.strokePath();
+      }
+    }
+  }
+
+  private drawWeather(g: Phaser.GameObjects.Graphics) {
+    if (!this.weatherParticles) return;
+
+    for (const p of this.weatherParticles) {
+      if (this.worldIndex === 1) { // Jelly wobbly bubbles
+        g.fillStyle(0xffaad4, p.alpha * 0.4);
+        g.fillCircle(p.x, p.y, p.size);
+      } else if (this.worldIndex === 2) { // Forest leaves
+        g.fillStyle(0x3ea62c, p.alpha * 0.6);
+        g.beginPath();
+        const cos = Math.cos(p.angle), sin = Math.sin(p.angle);
+        const w = p.size * 1.8, h = p.size * 0.8;
+        g.moveTo(p.x - w * cos, p.y - w * sin);
+        g.lineTo(p.x + h * sin, p.y - h * cos);
+        g.lineTo(p.x + w * cos, p.y + w * sin);
+        g.lineTo(p.x - h * sin, p.y + h * cos);
+        g.closePath();
+        g.fillPath();
+      } else if (this.worldIndex === 3) { // Cyber bits
+        g.lineStyle(1.8, 0x00f0ff, p.alpha * 0.7);
+        g.beginPath(); g.moveTo(p.x, p.y); g.lineTo(p.x, p.y + 8); g.strokePath();
+      } else if (this.worldIndex === 4) { // Rain drops
+        g.lineStyle(1.2, 0xaad4ff, p.alpha * 0.55);
+        g.beginPath(); g.moveTo(p.x, p.y); g.lineTo(p.x - 3, p.y - 12); g.strokePath();
+      } else if (this.worldIndex === 5) { // Snow
+        g.fillStyle(0xffffff, p.alpha * 0.75);
+        g.fillCircle(p.x, p.y, p.size * 0.8);
+      } else { // Magma embers
+        g.fillStyle(0xff5500, p.alpha * 0.85);
+        g.fillCircle(p.x, p.y, p.size);
+        g.fillStyle(0xffea00, p.alpha * 0.9);
+        g.fillCircle(p.x, p.y, p.size * 0.5);
       }
     }
   }
@@ -1097,83 +1347,118 @@ export class GameScene extends Phaser.Scene {
     // ─── FACE: Eyes & Expressions ─────────────────────────────────────
     if (b.type !== 'chest' && b.type !== 'portal') {
       const eyeY = cy - 4;
-      const eyeScaleY = b.isBlinking ? 0.15 : 1;
+      const isHovered = (this.hoveredBuddy === b);
+
+      // Project look direction to screen space to offset pupils
+      const fromPos = gridToScreen(b.x, b.y, b.z, this.rotState);
+      const toPos   = gridToScreen(b.x + b.dir.x, b.y + b.dir.y, b.z + b.dir.z, this.rotState);
+      const lookDx = toPos.x - fromPos.x;
+      const lookDy = toPos.y - fromPos.y;
+      const lookLen = Math.hypot(lookDx, lookDy) || 1;
+      const lnx = lookDx / lookLen;
+      const lny = lookDy / lookLen;
+
+      // Max eye pupil lookup offset in screen pixels
+      const lookOffsetMax = 2.2;
+      const lox = lnx * lookOffsetMax;
+      const loy = lny * (lookOffsetMax * 0.75);
 
       if (b.state === 'bump') {
-        // Dizzy / Bumped X-eyes + sweat/dizzy lines
-        g.lineStyle(3, 0x111111, 1);
-        const le = tPt(cx - 10, eyeY);
-        const re = tPt(cx + 10, eyeY);
-        const sz = 4 * Math.min(scaleX, scaleY);
-        g.lineBetween(le.x - sz, le.y - sz, le.x + sz, le.y + sz);
-        g.lineBetween(le.x - sz, le.y + sz, le.x + sz, le.y - sz);
-        g.lineBetween(re.x - sz, re.y - sz, re.x + sz, re.y + sz);
-        g.lineBetween(re.x - sz, re.y + sz, re.x + sz, re.y - sz);
+        // Squinting / Squeezed > < eyes
+        g.lineStyle(2.8 * Math.min(scaleX, scaleY), 0x111111, 1);
+        const le1 = tPt(cx - 13, eyeY - 2.5);
+        const leMid = tPt(cx - 9, eyeY);
+        const le2 = tPt(cx - 13, eyeY + 2.5);
+        g.beginPath(); g.moveTo(le1.x, le1.y); g.lineTo(leMid.x, leMid.y); g.lineTo(le2.x, le2.y); g.strokePath();
 
-        // Frown mouth
+        const re1 = tPt(cx + 13, eyeY - 2.5);
+        const reMid = tPt(cx + 9, eyeY);
+        const re2 = tPt(cx + 13, eyeY + 2.5);
+        g.beginPath(); g.moveTo(re1.x, re1.y); g.lineTo(reMid.x, reMid.y); g.lineTo(re2.x, re2.y); g.strokePath();
+
+        // Sad frown mouth
         const m = tPt(cx, eyeY + 8);
-        g.lineStyle(2, 0x333333, 0.9);
+        g.lineStyle(2 * Math.min(scaleX, scaleY), 0x333333, 0.9);
         g.beginPath();
-        g.arc(m.x, m.y + 3, 5 * Math.min(scaleX, scaleY), Math.PI * 1.1, Math.PI * 1.9);
+        g.arc(m.x, m.y + 3 * Math.min(scaleX, scaleY), 5 * Math.min(scaleX, scaleY), Math.PI * 1.15, Math.PI * 1.85);
         g.strokePath();
-      } else if (b.state === 'anticipation') {
-        // Shocked / Wide-eyed O-mouth!
-        g.fillStyle(0x111111, 1);
-        const le = tPt(cx - 10, eyeY);
-        const re = tPt(cx + 10, eyeY);
-        g.fillCircle(le.x, le.y, 5.5 * Math.min(scaleX, scaleY));
-        g.fillCircle(re.x, re.y, 5.5 * Math.min(scaleX, scaleY));
-        g.fillStyle(0xffffff, 1);
-        g.fillCircle(tPt(cx - 8, eyeY - 1).x, tPt(cx - 8, eyeY - 1).y, 2.5 * Math.min(scaleX, scaleY));
-        g.fillCircle(tPt(cx + 12, eyeY - 1).x, tPt(cx + 12, eyeY - 1).y, 2.5 * Math.min(scaleX, scaleY));
+      } else if (b.state === 'anticipation' || b.state === 'escaping') {
+        // Happy caret ^ ^ eyes
+        g.lineStyle(2.8 * Math.min(scaleX, scaleY), 0x111111, 1);
+        const le1 = tPt(cx - 13, eyeY + 1.5);
+        const leMid = tPt(cx - 9.5, eyeY - 2);
+        const le2 = tPt(cx - 6, eyeY + 1.5);
+        g.beginPath(); g.moveTo(le1.x, le1.y); g.lineTo(leMid.x, leMid.y); g.lineTo(le2.x, le2.y); g.strokePath();
 
-        // Open circle mouth
-        g.fillStyle(0x111111, 1);
-        const m = tPt(cx, eyeY + 9);
-        g.fillCircle(m.x, m.y, 4 * Math.min(scaleX, scaleY));
-      } else if (b.state === 'escaping') {
-        // Happy Winking Right Eye + Wide Left Eye + Big grin!
-        g.fillStyle(0x111111, 1);
-        const le = tPt(cx - 10, eyeY);
-        g.fillEllipse(le.x, le.y, 8 * scaleX, 8 * scaleY);
-        g.fillStyle(0xffffff, 0.9);
-        g.fillCircle(tPt(cx - 8, eyeY - 1).x, tPt(cx - 8, eyeY - 1).y, 2 * Math.min(scaleX, scaleY));
-
-        // Wink right eye (upward curve)
-        g.lineStyle(3, 0x111111, 1);
-        const re = tPt(cx + 10, eyeY);
-        g.beginPath();
-        g.arc(re.x, re.y + 2, 5 * Math.min(scaleX, scaleY), Math.PI * 1.1, Math.PI * 1.9);
-        g.strokePath();
+        const re1 = tPt(cx + 6, eyeY + 1.5);
+        const reMid = tPt(cx + 9.5, eyeY - 2);
+        const re2 = tPt(cx + 13, eyeY + 1.5);
+        g.beginPath(); g.moveTo(re1.x, re1.y); g.lineTo(reMid.x, reMid.y); g.lineTo(re2.x, re2.y); g.strokePath();
 
         // Big excited open grin
-        const m = tPt(cx, eyeY + 8);
+        const m = tPt(cx, eyeY + 7);
         g.fillStyle(0x111111, 1);
         g.beginPath();
         g.arc(m.x, m.y - 1, 6 * Math.min(scaleX, scaleY), 0, Math.PI);
         g.closePath();
         g.fillPath();
-      } else {
-        // Idle / Normal eye blink and blush
+      } else if (isHovered) {
+        // Shocked / wide open eyes in anticipation
         g.fillStyle(0x111111, 1);
         const le = tPt(cx - 10, eyeY);
-        g.fillEllipse(le.x, le.y, 8 * scaleX, 7 * eyeScaleY * scaleY);
-        
         const re = tPt(cx + 10, eyeY);
-        g.fillEllipse(re.x, re.y, 8 * scaleX, 7 * eyeScaleY * scaleY);
+        g.fillCircle(le.x, le.y, 6.0 * Math.min(scaleX, scaleY));
+        g.fillCircle(re.x, re.y, 6.0 * Math.min(scaleX, scaleY));
 
-        if (!b.isBlinking) {
-          g.fillStyle(0xffffff, 0.8);
-          const lhl = tPt(cx - 8, eyeY - 1);
-          const rhl = tPt(cx + 12, eyeY - 1);
-          g.fillCircle(lhl.x, lhl.y, 2 * Math.min(scaleX, scaleY));
-          g.fillCircle(rhl.x, rhl.y, 2 * Math.min(scaleX, scaleY));
+        g.fillStyle(0xffffff, 1);
+        g.fillCircle(le.x, le.y, 4.5 * Math.min(scaleX, scaleY));
+        g.fillCircle(re.x, re.y, 4.5 * Math.min(scaleX, scaleY));
 
-          g.fillStyle(0xff79a8, 0.4);
+        // Center pupils slightly looking towards path
+        g.fillStyle(0x111111, 1);
+        const lp = tPt(cx - 10 + lox * 0.7, eyeY + loy * 0.7);
+        const rp = tPt(cx + 10 + lox * 0.7, eyeY + loy * 0.7);
+        g.fillCircle(lp.x, lp.y, 2.5 * Math.min(scaleX, scaleY));
+        g.fillCircle(rp.x, rp.y, 2.5 * Math.min(scaleX, scaleY));
+
+        // Open circular O-mouth
+        g.fillStyle(0x111111, 1);
+        const m = tPt(cx, eyeY + 9);
+        g.fillCircle(m.x, m.y, 3.5 * Math.min(scaleX, scaleY));
+      } else {
+        // Idle / Normal blinking & looking
+        if (b.isBlinking) {
+          // Closed eyelid line
+          g.lineStyle(2.5 * Math.min(scaleX, scaleY), 0x111111, 1);
+          const le1 = tPt(cx - 14, eyeY);
+          const le2 = tPt(cx - 6, eyeY);
+          const re1 = tPt(cx + 6, eyeY);
+          const re2 = tPt(cx + 14, eyeY);
+          g.beginPath();
+          g.moveTo(le1.x, le1.y); g.lineTo(le2.x, le2.y);
+          g.moveTo(re1.x, re1.y); g.lineTo(re2.x, re2.y);
+          g.strokePath();
+        } else {
+          // Open eye ellipses
+          g.fillStyle(0x111111, 1);
+          const le = tPt(cx - 10, eyeY);
+          const re = tPt(cx + 10, eyeY);
+          g.fillEllipse(le.x, le.y, 8.5 * scaleX, 7.5 * scaleY);
+          g.fillEllipse(re.x, re.y, 8.5 * scaleX, 7.5 * scaleY);
+
+          // White gloss pupil highlight offset in target arrow direction
+          g.fillStyle(0xffffff, 0.85);
+          const lhl = tPt(cx - 10 + lox, eyeY - 1.2 + loy);
+          const rhl = tPt(cx + 10 + lox, eyeY - 1.2 + loy);
+          g.fillCircle(lhl.x, lhl.y, 2.2 * Math.min(scaleX, scaleY));
+          g.fillCircle(rhl.x, rhl.y, 2.2 * Math.min(scaleX, scaleY));
+
+          // Cute pink blush circles
+          g.fillStyle(0xff79a8, 0.45);
           const lc = tPt(cx - 16, eyeY + 4);
           const rc = tPt(cx + 16, eyeY + 4);
-          g.fillEllipse(lc.x, lc.y, 10 * scaleX, 5 * scaleY);
-          g.fillEllipse(rc.x, rc.y, 10 * scaleX, 5 * scaleY);
+          g.fillEllipse(lc.x, lc.y, 9.5 * scaleX, 4.5 * scaleY);
+          g.fillEllipse(rc.x, rc.y, 9.5 * scaleX, 4.5 * scaleY);
         }
 
         // Curved smile
@@ -1182,7 +1467,7 @@ export class GameScene extends Phaser.Scene {
         const s2 = tPt(cx, eyeY + 10.5);
         const s2m = tPt(cx + 2.5, eyeY + 9.5);
         const s3 = tPt(cx + 5, eyeY + 7);
-        g.lineStyle(2, 0x333333, 0.8);
+        g.lineStyle(2, 0x333333, 0.85);
         g.beginPath();
         g.moveTo(s1.x, s1.y);
         g.lineTo(s1m.x, s1m.y);
@@ -1192,6 +1477,7 @@ export class GameScene extends Phaser.Scene {
         g.strokePath();
       }
     }
+
 
     // ─── HATS: Render equipped skin 3D hat on top of buddy ──────────────
     if (b.type !== 'chest') {
@@ -1586,24 +1872,32 @@ export class GameScene extends Phaser.Scene {
       backgroundColor: '#22004488', padding: { x: 12, y: 6 }
     }).setOrigin(0.5).setDepth(21).setAlpha(0);
 
-    // Buttons: Home, Reset, Rotate — properly sized and spaced
-    const btnStyle = { fontFamily: 'Orbitron', fontSize: btnFs + 'px', color: '#ffffff' };
-    const btnSpacing = btnFs * 2.2;
-    const home  = this.add.text(W - pad - btnFs * 0.5, btnY, '🏠', btnStyle)
-      .setOrigin(0.5).setDepth(21).setInteractive({ useHandCursor: true });
-    const reset = this.add.text(W - pad - btnFs * 0.5 - btnSpacing, btnY, '🔄', btnStyle)
-      .setOrigin(0.5).setDepth(21).setInteractive({ useHandCursor: true });
+    // Buttons: Home, Reset, Rotate — properly sized, spaced, and styled in 3D cartoon fashion
+    const btnSize = Math.max(38, btnFs * 1.4);
+    const homeX = W - pad - btnSize * 0.5;
+    createCartoonButton(this, homeX, btnY, btnSize, btnSize, '🏠', () => {
+      audio.playTap();
+      this.goToWorldSelect();
+    }, { bgColor: 0xff5555, fontSize: Math.round(btnSize * 0.55) });
+
+    const resetX = homeX - btnSize * 1.25;
+    createCartoonButton(this, resetX, btnY, btnSize, btnSize, '🔄', () => {
+      audio.playTap();
+      this.resetLevel();
+    }, { bgColor: 0x50fa7b, fontSize: Math.round(btnSize * 0.55) });
 
     // Rotation arrows — side of screen, vertically centered
-    const rotL = this.add.text(pad, H / 2, '◀', { ...btnStyle, color: '#9b72ff' })
-      .setOrigin(0, 0.5).setDepth(21).setInteractive({ useHandCursor: true });
-    const rotR = this.add.text(W - pad, H / 2, '▶', { ...btnStyle, color: '#9b72ff' })
-      .setOrigin(1, 0.5).setDepth(21).setInteractive({ useHandCursor: true });
+    const arrowW = Math.max(32, btnFs * 1.2);
+    const arrowH = Math.max(42, btnFs * 1.6);
+    createCartoonButton(this, pad + arrowW * 0.5, H / 2, arrowW, arrowH, '◀', () => {
+      audio.playTap();
+      this.rotateView(-1);
+    }, { bgColor: 0x9b72ff, fontSize: Math.round(arrowW * 0.55) });
 
-    home.on('pointerdown',  () => { audio.playTap(); this.goToWorldSelect(); });
-    reset.on('pointerdown', () => { audio.playTap(); this.resetLevel(); });
-    rotL.on('pointerdown',  () => { audio.playTap(); this.rotateView(-1); });
-    rotR.on('pointerdown',  () => { audio.playTap(); this.rotateView(1); });
+    createCartoonButton(this, W - pad - arrowW * 0.5, H / 2, arrowW, arrowH, '▶', () => {
+      audio.playTap();
+      this.rotateView(1);
+    }, { bgColor: 0x9b72ff, fontSize: Math.round(arrowW * 0.55) });
   }
 
   private drawHUDBar(W: number, hudH = 50) {

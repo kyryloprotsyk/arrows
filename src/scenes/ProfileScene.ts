@@ -3,6 +3,7 @@ import Phaser from 'phaser';
 import { GameData } from '../utils/GameData';
 import { LeaderboardService } from '../utils/LeaderboardService';
 import { audio } from '../audio';
+import { createCartoonButton } from '../utils/IsoHelper';
 
 export class ProfileScene extends Phaser.Scene {
   constructor() { super({ key: 'Profile' }); }
@@ -28,10 +29,10 @@ export class ProfileScene extends Phaser.Scene {
       shadow: { offsetX: 0, offsetY: 4, color: '#ffa500', blur: 18, fill: true }
     }).setOrigin(0.5);
 
-    const closeBtn = this.add.text(W - 28, Math.max(36, H * 0.06), '✖', {
-      fontFamily: 'Orbitron', fontSize: '26px', color: '#ff6b6b'
-    }).setOrigin(0.5).setInteractive({ useHandCursor: true });
-    closeBtn.on('pointerdown', () => { audio.playTap(); this.scene.start('Menu'); });
+    createCartoonButton(this, 75, 38, 100, 42, '◀ Menu', () => {
+      audio.playTap();
+      this.scene.start('Menu');
+    }, { bgColor: 0xff5555, fontSize: 16 });
 
     // Profile Card Container
     const cardY = H * 0.28;
@@ -153,20 +154,9 @@ export class ProfileScene extends Phaser.Scene {
     });
 
     // Leaderboard shortcut button
-    const btnLdb = this.add.container(W / 2, H - 50);
-    const bgLdb = this.add.graphics();
-    const wLdb = Math.min(W - 40, 280), hLdb = 48;
-    bgLdb.fillStyle(0xff6eb4, 1);
-    bgLdb.fillRoundedRect(-wLdb / 2, -hLdb / 2, wLdb, hLdb, 24);
-    bgLdb.lineStyle(2, 0xffffffff, 0.8);
-    bgLdb.strokeRoundedRect(-wLdb / 2, -hLdb / 2, wLdb, hLdb, 24);
-
-    const txtLdb = this.add.text(0, 0, '🏆 View Global Leaderboard →', {
-      fontFamily: 'Orbitron', fontSize: '16px', color: '#ffffff', fontStyle: 'bold'
-    }).setOrigin(0.5);
-
-    btnLdb.add([bgLdb, txtLdb]);
-    btnLdb.setSize(wLdb, hLdb).setInteractive({ useHandCursor: true });
-    btnLdb.on('pointerdown', () => { audio.playTap(); this.scene.start('Leaderboard'); });
+    createCartoonButton(this, W / 2, H - 55, Math.min(W - 40, 280), 48, '🏆 View Global Leaderboard →', () => {
+      audio.playTap();
+      this.scene.start('Leaderboard');
+    }, { bgColor: 0xff6eb4, fontSize: 14 });
   }
 }

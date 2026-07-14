@@ -1,7 +1,7 @@
 /* VictoryScene.ts — Cinematic level-clear screen with stars, confetti, rewards */
 import Phaser from 'phaser';
 import { GameData } from '../utils/GameData';
-import { hslToInt, getBlockPalette, TILE_W, TILE_H, BLOCK_H, drawHat } from '../utils/IsoHelper';
+import { hslToInt, getBlockPalette, TILE_W, TILE_H, BLOCK_H, drawHat, blendColor } from '../utils/IsoHelper';
 import { audio } from '../audio';
 import { AdManager } from '../utils/AdManager';
 
@@ -37,11 +37,11 @@ export class VictoryScene extends Phaser.Scene {
     }).setDepth(0);
 
     // Animated isometric trophy block
-    this.createTrophyBlock(W / 2, H * 0.22, world);
+    this.createTrophyBlock(W / 2, H * 0.15, world);
 
     // LEVEL CLEAR / DAILY COMPLETE heading
     const clearTitle = isDaily ? '🔥 DAILY COMPLETE! (+150 🪙)' : '✨ LEVEL CLEAR! ✨';
-    const clearTxt = this.add.text(W / 2, H * 0.35, clearTitle, {
+    const clearTxt = this.add.text(W / 2, H * 0.26, clearTitle, {
       fontFamily: 'Orbitron',
       fontSize: Math.min(W * (isDaily ? 0.075 : 0.09), 48) + 'px',
       color: '#ffe45e',
@@ -55,7 +55,7 @@ export class VictoryScene extends Phaser.Scene {
     });
 
     // Star rating display
-    this.createStarRow(W / 2, H * 0.44, stars);
+    this.createStarRow(W / 2, H * 0.36, stars);
 
     // Par score badge
     if (par !== undefined && movesTotal !== undefined) {
@@ -68,30 +68,39 @@ export class VictoryScene extends Phaser.Scene {
       const parBg = this.add.graphics().setAlpha(0);
       const pw = Math.min(W * 0.5, 180), ph = 28;
       parBg.fillStyle(0x110022, 0.9);
-      parBg.fillRoundedRect(W / 2 - pw / 2, H * 0.495 - ph / 2, pw, ph, 14);
+      parBg.fillRoundedRect(W / 2 - pw / 2, H * 0.42 - ph / 2, pw, ph, 14);
       parBg.lineStyle(1.5, parDiff < 0 ? 0x00ffcc : parDiff === 0 ? 0xffe45e : 0xff6b6b, 0.8);
-      parBg.strokeRoundedRect(W / 2 - pw / 2, H * 0.495 - ph / 2, pw, ph, 14);
-      const parTxt = this.add.text(W / 2, H * 0.495, parLabel, {
+      parBg.strokeRoundedRect(W / 2 - pw / 2, H * 0.42 - ph / 2, pw, ph, 14);
+      const parTxt = this.add.text(W / 2, H * 0.42, parLabel, {
         fontFamily: 'Orbitron', fontSize: '14px', color: parColor, fontStyle: 'bold'
       }).setOrigin(0.5).setAlpha(0);
       this.tweens.add({ targets: [parBg, parTxt], alpha: 1, duration: 400, delay: 700 });
     }
 
-    // Stats card
-    this.createStatsCard(W / 2, H * 0.565, reward, xpEarned, userRank);
+    // Stats card Y calculations to avoid overlap on small screens
+    const statsCardHeight = 76;
+    const statsCardY = H * 0.505;
+    this.createStatsCard(W / 2, statsCardY, reward, xpEarned, userRank);
+
+    let currentY = statsCardY + statsCardHeight / 2; // bottom of stats card
 
     // Level up check
+    let lvlUpBannerText: Phaser.GameObjects.Text | null = null;
     if (newLevel && oldLevel && newLevel > oldLevel) {
       GameData.coins.add(100);
-      const lvlUpBanner = this.add.text(W / 2, H * 0.64, `🎉 LEVEL UP! Lvl ${oldLevel} → ${newLevel}! (+100 Bonus Coins) 🎉`, {
-        fontFamily: 'Orbitron', fontSize: Math.min(W * 0.045, 17) + 'px',
-        color: '#00ffcc', backgroundColor: '#002244ee', padding: { x: 14, y: 6 }
+      currentY += 8; // gap
+      const bannerHeight = 32;
+      const bannerY = currentY + bannerHeight / 2;
+      lvlUpBannerText = this.add.text(W / 2, bannerY, `🎉 LEVEL UP! Lvl ${oldLevel} → ${newLevel}! (+100 Bonus Coins) 🎉`, {
+        fontFamily: 'Orbitron', fontSize: Math.min(W * 0.040, 15) + 'px',
+        color: '#00ffcc', backgroundColor: '#002244ee', padding: { x: 12, y: 5 }
       }).setOrigin(0.5).setDepth(15).setAlpha(0);
 
       this.tweens.add({
-        targets: lvlUpBanner, alpha: 1, y: H * 0.635,
+        targets: lvlUpBannerText, alpha: 1, scale: 1.05,
         duration: 500, delay: 1000, ease: 'Back.Out'
       });
+      currentY += bannerHeight;
     }
 
     // Proportional next level logic (clearing Level 5 automatically moves to next World's Level 1)
@@ -107,18 +116,31 @@ export class VictoryScene extends Phaser.Scene {
     }
 
     // 3X Rewarded Ad Bonus Button
+    currentY += 12; // gap
+    const btnAdHeight = 48;
+    const btnAdY = currentY + btnAdHeight / 2;
     const btnAd = this.createBtn(
-      W / 2, H * 0.70, 260, 48, 0x00bb88, 0x00ffcc, `👑 Watch Ad for 3X Coins! (+${reward * 2}🪙)`, 0
+      W / 2, btnAdY, 260, btnAdHeight, 0x00bb88, 0x00ffcc, `👑 Watch Ad for 3X Coins! (+${reward * 2}🪙)`, 0
     );
+    currentY += btnAdHeight;
 
+    // Next button
+    currentY += 12; // gap
+    const btnNextHeight = 50;
+    const btnNextY = currentY + btnNextHeight / 2;
     const btnNextText = isDaily ? '📅 Daily Calendar →' : (hasNext ? (nextWorld !== world ? `Next World ${nextWorld} →` : `Next Level ${nextLevel} →`) : '🌍 World Select');
     const btnNext = this.createBtn(
-      W / 2, H * 0.81, 230, 52, 0xff6eb4, 0xff0088,
+      W / 2, btnNextY, 230, btnNextHeight, 0xff6eb4, 0xff0088,
       btnNextText,
       100
     );
+    currentY += btnNextHeight;
 
-    const btnRetry = this.createBtn(W / 2, H * 0.90, 180, 44, 0x664466, 0x9b72ff, '🔄 Play Again', 200);
+    // Play Again/Retry button
+    currentY += 12; // gap
+    const btnRetryHeight = 42;
+    const btnRetryY = currentY + btnRetryHeight / 2;
+    const btnRetry = this.createBtn(W / 2, btnRetryY, 180, btnRetryHeight, 0x664466, 0x9b72ff, '🔄 Play Again', 200);
 
     btnAd.on('pointerdown', async () => {
       audio.playTap();
@@ -271,27 +293,27 @@ export class VictoryScene extends Phaser.Scene {
   }
 
   private createStatsCard(cx: number, cy: number, reward: number, xpEarned?: number, userRank?: number) {
-    const w = Math.min(this.scale.width * 0.85, 330), h = 100;
+    const w = Math.min(this.scale.width * 0.85, 330), h = 76;
     const g = this.add.graphics().setAlpha(0);
     g.fillStyle(0x1a0040, 0.9);
     g.fillRoundedRect(cx - w / 2, cy - h / 2, w, h, 16);
     g.lineStyle(1.5, 0x00ffcc, 0.6);
     g.strokeRoundedRect(cx - w / 2, cy - h / 2, w, h, 16);
 
-    const coins = this.add.text(cx - w * 0.28, cy - 20, `🪙 +${reward}`, {
-      fontFamily: 'Orbitron', fontSize: '20px', color: '#ffe45e', fontStyle: 'bold'
+    const coins = this.add.text(cx - w * 0.28, cy - 14, `🪙 +${reward}`, {
+      fontFamily: 'Orbitron', fontSize: '18px', color: '#ffe45e', fontStyle: 'bold'
     }).setOrigin(0.5).setAlpha(0);
 
-    const xp = this.add.text(cx, cy - 20, `⚡ +${xpEarned || 85} XP`, {
-      fontFamily: 'Orbitron', fontSize: '20px', color: '#00ffcc', fontStyle: 'bold'
+    const xp = this.add.text(cx, cy - 14, `⚡ +${xpEarned || 85} XP`, {
+      fontFamily: 'Orbitron', fontSize: '18px', color: '#00ffcc', fontStyle: 'bold'
     }).setOrigin(0.5).setAlpha(0);
 
-    const moves = this.add.text(cx + w * 0.28, cy - 20, `🔥 ${GameData.winStreak.get()}x Streak`, {
-      fontFamily: 'Orbitron', fontSize: '18px', color: '#ff6eb4', fontStyle: 'bold'
+    const moves = this.add.text(cx + w * 0.28, cy - 14, `🔥 ${GameData.winStreak.get()}x Streak`, {
+      fontFamily: 'Orbitron', fontSize: '16px', color: '#ff6eb4', fontStyle: 'bold'
     }).setOrigin(0.5).setAlpha(0);
 
-    const total = this.add.text(cx, cy + 22, `Total: ${GameData.coins.get()}🪙  •  Global Rank: #${userRank || 15} 🏆`, {
-      fontFamily: 'Orbitron', fontSize: '16px', color: '#ccbbff'
+    const total = this.add.text(cx, cy + 16, `Total: ${GameData.coins.get()}🪙  •  Global Rank: #${userRank || 15} 🏆`, {
+      fontFamily: 'Orbitron', fontSize: '14px', color: '#ccbbff'
     }).setOrigin(0.5).setAlpha(0);
 
     this.tweens.add({ targets: [g, coins, xp, moves, total], alpha: 1, duration: 500, delay: 900 });
@@ -301,55 +323,109 @@ export class VictoryScene extends Phaser.Scene {
     x: number, y: number, w: number, h: number,
     fill: number, glow: number, label: string, delay: number
   ): Phaser.GameObjects.Container {
+    void glow;
     const container = this.add.container(x, y).setAlpha(0).setDepth(10);
+    container.setSize(w, h);
+    container.setInteractive(new Phaser.Geom.Rectangle(-w / 2, -h / 2, w, h), Phaser.Geom.Rectangle.Contains);
+    container.input!.cursor = 'pointer';
 
-    const g = this.add.graphics();
-    const draw = (hover: boolean) => {
-      g.clear();
-      g.fillStyle(glow, 0.2);
-      g.fillRoundedRect(-w / 2 + 2, -h / 2 + 6, w, h, h / 2);
-      g.fillStyle(hover ? fill : Phaser.Display.Color.ValueToColor(fill).darken(15).color, 1);
-      g.fillRoundedRect(-w / 2, -h / 2, w, h, h / 2);
-      for (let p = 0; p < 3; p++) {
-        g.lineStyle([4, 2.5, 1.5][p], glow, [0.12, 0.3, 0.7][p]);
-        g.strokeRoundedRect(-w / 2, -h / 2, w, h, h / 2);
-      }
-    };
-    draw(false);
+    const bg = this.add.graphics();
+    container.add(bg);
 
     const labelLen = label.replace(/\p{Emoji}/gu, '  ').length;
     const fontSize = Math.min(Math.round(h * 0.42), Math.round(w / Math.max(labelLen * 0.52, 1)), 22);
 
-    const txt = this.add.text(0, 0, label, {
+    const txt = this.add.text(0, -2, label, {
       fontFamily: 'Orbitron',
       fontSize: `${fontSize}px`,
       color: '#ffffff',
-      stroke: '#000000', strokeThickness: 1.5,
+      stroke: '#000000', strokeThickness: 2.2,
       align: 'center'
     }).setOrigin(0.5);
+    container.add(txt);
 
-    container.add([g, txt]);
+    const faceCol = fill;
+    const shadowCol = blendColor(faceCol, 0x000000, 0.4);
+    const r = h / 2;
 
-    container.setInteractive(new Phaser.Geom.Rectangle(-w / 2, -h / 2, w, h), Phaser.Geom.Rectangle.Contains);
-    container.input!.cursor = 'pointer';
+    const draw = (state: 'idle' | 'hover' | 'pressed') => {
+      bg.clear();
+      
+      let faceY = -h / 2;
+      let shH = 6;
+      
+      if (state === 'pressed') {
+        faceY = -h / 2 + 4;
+        shH = 2;
+        txt.setY(2);
+      } else {
+        txt.setY(-2);
+      }
+
+      const faceBright = state === 'hover' ? blendColor(faceCol, 0xffffff, 0.15) : faceCol;
+
+      // 1. Draw 3D shadow/thickness (Darker bottom layer)
+      bg.fillStyle(shadowCol, 1);
+      bg.fillRoundedRect(-w / 2, -h / 2 + shH, w, h, r);
+
+      // 2. Draw Main top face
+      bg.fillStyle(faceBright, 1);
+      bg.fillRoundedRect(-w / 2, faceY, w, h, r);
+
+      // 3. Highlight Bevel
+      bg.lineStyle(1.8, 0xffffff, 0.4);
+      bg.beginPath();
+      bg.moveTo(-w / 2 + r, faceY + 1.2);
+      bg.lineTo(w / 2 - r, faceY + 1.2);
+      bg.strokePath();
+    };
+
+    draw('idle');
 
     container.on('pointerover', () => {
-      draw(true);
+      draw('hover');
       this.tweens.add({
         targets: container,
-        scale: 1.05,
-        duration: 150,
-        ease: 'Quad.easeOut',
+        scaleX: 1.05,
+        scaleY: 1.05,
+        duration: 100,
+        ease: 'Quad.Out',
         overwrite: true
       });
     });
-    container.on('pointerout',  () => {
-      draw(false);
+
+    container.on('pointerout', () => {
+      draw('idle');
       this.tweens.add({
         targets: container,
-        scale: 1.0,
-        duration: 150,
-        ease: 'Quad.easeOut',
+        scaleX: 1.0,
+        scaleY: 1.0,
+        duration: 100,
+        ease: 'Quad.Out',
+        overwrite: true
+      });
+    });
+
+    container.on('pointerdown', () => {
+      draw('pressed');
+      this.tweens.add({
+        targets: container,
+        scaleX: 0.96,
+        scaleY: 0.96,
+        duration: 50,
+        ease: 'Quad.Out',
+        overwrite: true
+      });
+    });
+
+    container.on('pointerup', () => {
+      draw('hover');
+      this.tweens.add({
+        targets: container,
+        scaleX: 1.05,
+        scaleY: 1.05,
+        duration: 80,
+        ease: 'Quad.Out',
         overwrite: true
       });
     });

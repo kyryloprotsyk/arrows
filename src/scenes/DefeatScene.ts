@@ -1,7 +1,7 @@
 /* DefeatScene.ts — Game Over screen offering Ad Continuation or Restart */
 import Phaser from 'phaser';
 import { GameData } from '../utils/GameData';
-import { hslToInt, getBlockPalette, TILE_W, TILE_H, BLOCK_H, drawHat } from '../utils/IsoHelper';
+import { hslToInt, getBlockPalette, TILE_W, TILE_H, BLOCK_H, drawHat, createCartoonButton } from '../utils/IsoHelper';
 import { audio } from '../audio';
 import { AdManager } from '../utils/AdManager';
 
@@ -158,88 +158,43 @@ export class DefeatScene extends Phaser.Scene {
   private createButtons(cx: number, cy: number, world: number, level: number, isDaily?: boolean) {
     // 1. WATCH AD FOR +5 MOVES (Primary Action)
     const adBtnW = 280, adBtnH = 65;
-    const adBtn = this.add.container(cx, cy).setAlpha(0).setScale(0.8);
-    const adGfx = this.add.graphics();
-    const drawAdBtn = (hover: boolean) => {
-      adGfx.clear();
-      adGfx.fillStyle(hover ? 0xffcc00 : 0xffaa00, 1);
-      adGfx.fillRoundedRect(-adBtnW / 2, -adBtnH / 2, adBtnW, adBtnH, 16);
-      adGfx.lineStyle(4, 0xffffff, hover ? 1 : 0.8);
-      adGfx.strokeRoundedRect(-adBtnW / 2, -adBtnH / 2, adBtnW, adBtnH, 16);
-    };
-    drawAdBtn(false);
-
     const adFontSize = Math.min(Math.round(adBtnH * 0.38), Math.round(adBtnW / Math.max('🎬 Watch Ad for +5 Moves'.length * 0.5, 1)), 20);
-    const adTxt = this.add.text(0, 0, '🎬 Watch Ad for +5 Moves', {
-      fontFamily: 'Orbitron', fontSize: `${adFontSize}px`, color: '#000', fontStyle: 'bold', align: 'center'
-    }).setOrigin(0.5);
-
-    adBtn.add([adGfx, adTxt]);
-    adBtn.setInteractive(new Phaser.Geom.Rectangle(-adBtnW / 2, -adBtnH / 2, adBtnW, adBtnH), Phaser.Geom.Rectangle.Contains);
-    adBtn.input!.cursor = 'pointer';
-    
-    adBtn.on('pointerover', () => { drawAdBtn(true); this.tweens.add({ targets: adBtn, scale: 1.05, duration: 150 }); });
-    adBtn.on('pointerout', () => { drawAdBtn(false); this.tweens.add({ targets: adBtn, scale: 1, duration: 150 }); });
-    adBtn.on('pointerdown', async () => {
+    const adBtn = createCartoonButton(this, cx, cy, adBtnW, adBtnH, '🎬 Watch Ad for +5 Moves', async () => {
       audio.playTap();
-      // Call AdManager to show reward video
-      const success = await AdManager.showRewardedAd('extra_moves' as any); // cast to any if 'extra_moves' is not in AdType
+      const success = await AdManager.showRewardedAd('extra_moves' as any);
       if (success) {
-        // Success callback: return to game with +5 moves without losing progress
         this.cameras.main.fadeOut(300, 10, 0, 26);
         this.time.delayedCall(320, () => {
           this.scene.resume('Game', { bonusMoves: 5 });
           this.scene.stop();
         });
       }
-    });
+    }, { bgColor: 0xffaa00, textColor: '#000000', fontSize: adFontSize });
+    adBtn.setAlpha(0).setScale(0.8);
 
     // 2. RESTART (Secondary Action)
     const restartBtnW = 200, restartBtnH = 55;
-    const restartBtn = this.add.container(cx, cy + 90).setAlpha(0).setScale(0.8);
-    const restartGfx = this.add.graphics();
-    const drawRestartBtn = (hover: boolean) => {
-      restartGfx.clear();
-      restartGfx.fillStyle(0x333344, hover ? 1 : 0.8);
-      restartGfx.fillRoundedRect(-restartBtnW / 2, -restartBtnH / 2, restartBtnW, restartBtnH, 12);
-    };
-    drawRestartBtn(false);
-
     const restartFontSize = Math.min(Math.round(restartBtnH * 0.38), Math.round(restartBtnW / Math.max('🔄 Restart Level'.length * 0.5, 1)), 20);
-    const restartTxt = this.add.text(0, 0, '🔄 Restart Level', {
-      fontFamily: 'Orbitron', fontSize: `${restartFontSize}px`, color: '#ffffff', fontStyle: 'bold', align: 'center'
-    }).setOrigin(0.5);
-
-    restartBtn.add([restartGfx, restartTxt]);
-    restartBtn.setInteractive(new Phaser.Geom.Rectangle(-restartBtnW / 2, -restartBtnH / 2, restartBtnW, restartBtnH), Phaser.Geom.Rectangle.Contains);
-    restartBtn.input!.cursor = 'pointer';
-
-    restartBtn.on('pointerover', () => { drawRestartBtn(true); this.tweens.add({ targets: restartBtn, scale: 1.05, duration: 150 }); });
-    restartBtn.on('pointerout', () => { drawRestartBtn(false); this.tweens.add({ targets: restartBtn, scale: 1, duration: 150 }); });
-    restartBtn.on('pointerdown', () => {
+    const restartBtn = createCartoonButton(this, cx, cy + 90, restartBtnW, restartBtnH, '🔄 Restart Level', () => {
       audio.playTap();
       this.cameras.main.fadeOut(300, 10, 0, 26);
       this.time.delayedCall(320, () => {
         this.scene.stop();
         this.scene.start('Game', { world, level, isDaily });
       });
-    });
+    }, { bgColor: 0x50fa7b, fontSize: restartFontSize });
+    restartBtn.setAlpha(0).setScale(0.8);
 
     // 3. QUIT (Tertiary)
-    const quitBtnW = 160, quitBtnH = 40;
-    const quitBtn = this.add.container(cx, cy + 160).setAlpha(0);
-    const quitTxt = this.add.text(0, 0, '🏠 Main Menu', {
-      fontFamily: 'Orbitron', fontSize: Math.min(Math.round(quitBtnH * 0.42), 18) + 'px', color: '#aaaaaa', align: 'center'
-    }).setOrigin(0.5);
-    quitBtn.add(quitTxt);
-    quitBtn.setSize(quitBtnW, quitBtnH).setInteractive({ useHandCursor: true });
-    quitBtn.on('pointerdown', () => {
+    const quitBtnW = 180, quitBtnH = 48;
+    const quitBtn = createCartoonButton(this, cx, cy + 165, quitBtnW, quitBtnH, '🏠 Main Menu', () => {
       audio.playTap();
       this.cameras.main.fadeOut(300, 10, 0, 26);
       this.time.delayedCall(320, () => {
         this.scene.start('Menu');
       });
-    });
+    }, { bgColor: 0xff5555, fontSize: 16 });
+    quitBtn.setAlpha(0).setScale(0.8);
 
     // Animate all in
     this.tweens.add({

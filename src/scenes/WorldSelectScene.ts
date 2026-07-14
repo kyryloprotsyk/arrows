@@ -2,7 +2,7 @@
 import Phaser from 'phaser';
 import { GameData } from '../utils/GameData';
 import { audio } from '../audio';
-import { hslToInt } from '../utils/IsoHelper';
+import { hslToInt, createCartoonButton } from '../utils/IsoHelper';
 
 const WORLDS = [
   { id: 1, name: 'Jelly Hills',    emoji: '🌸', hue: 330, desc: 'Sweet & simple puzzles',  starsNeeded: 0 },
@@ -61,17 +61,11 @@ export class WorldSelectScene extends Phaser.Scene {
     });
 
     // Back button
-    const backBtn = this.add.text(45, 35, '◀ Back', {
-      fontFamily: 'Orbitron', fontSize: '18px', color: '#9b72ff',
-      backgroundColor: '#1a0033aa', padding: { x: 12, y: 8 }
-    }).setOrigin(0.5).setInteractive({ useHandCursor: true });
-    backBtn.on('pointerdown', () => {
+    createCartoonButton(this, 75, 38, 100, 42, '◀ Back', () => {
       audio.playTap();
       this.cameras.main.fadeOut(300, 10, 0, 26);
       this.time.delayedCall(320, () => this.scene.start('Menu'));
-    });
-    backBtn.on('pointerover', () => { backBtn.setColor('#ff85c1'); backBtn.setBackgroundColor('#2a0055aa'); });
-    backBtn.on('pointerout', () => { backBtn.setColor('#9b72ff'); backBtn.setBackgroundColor('#1a0033aa'); });
+    }, { bgColor: 0x9b72ff, fontSize: 16 });
   }
 
   private createWorldCard(

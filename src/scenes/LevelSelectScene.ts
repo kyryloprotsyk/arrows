@@ -5,7 +5,8 @@ import { audio } from '../audio';
 import {
   TILE_W, TILE_H, BLOCK_H,
   drawIsoCube, drawHat, hslToInt,
-  drawCartoonCosmicBg, createCosmicEffects
+  drawCartoonCosmicBg, createCosmicEffects,
+  createCartoonButton
 } from '../utils/IsoHelper';
 
 interface LevelNode {
@@ -130,17 +131,11 @@ export class LevelSelectScene extends Phaser.Scene {
     });
 
     // Back Button
-    const backBtn = this.add.text(45, 35, '◀ Worlds', {
-      fontFamily: 'Orbitron', fontSize: '18px', color: '#9b72ff',
-      backgroundColor: '#1a0033aa', padding: { x: 12, y: 8 }
-    }).setOrigin(0.5).setInteractive({ useHandCursor: true });
-    backBtn.on('pointerdown', () => {
+    createCartoonButton(this, 75, 38, 120, 42, '◀ Worlds', () => {
       audio.playTap();
       this.cameras.main.fadeOut(300, 10, 0, 26);
       this.time.delayedCall(320, () => this.scene.start('WorldSelect'));
-    });
-    backBtn.on('pointerover', () => { backBtn.setColor('#ff85c1'); backBtn.setBackgroundColor('#2a0055aa'); });
-    backBtn.on('pointerout', () => { backBtn.setColor('#9b72ff'); backBtn.setBackgroundColor('#1a0033aa'); });
+    }, { bgColor: 0x9b72ff, fontSize: 16 });
 
     // Fade in
     this.cameras.main.fadeIn(400, 10, 0, 26);

@@ -2,6 +2,7 @@
 import Phaser from 'phaser';
 import { GameData } from '../utils/GameData';
 import { audio } from '../audio';
+import { createCartoonButton } from '../utils/IsoHelper';
 
 export class DailyChallengeScene extends Phaser.Scene {
   constructor() { super({ key: 'DailyChallenge' }); }
@@ -143,16 +144,10 @@ export class DailyChallengeScene extends Phaser.Scene {
     }
 
     // Back button
-    const back = this.add.text(45, 35, '◀ Menu', {
-      fontFamily: 'Orbitron', fontSize: '18px', color: '#9b72ff',
-      backgroundColor: '#1a0033aa', padding: { x: 12, y: 8 }
-    }).setOrigin(0.5).setInteractive({ useHandCursor: true });
-    back.on('pointerdown', () => {
+    createCartoonButton(this, 75, 38, 100, 42, '◀ Menu', () => {
       audio.playTap();
       this.cameras.main.fadeOut(300, 10, 0, 26);
       this.time.delayedCall(320, () => this.scene.start('Menu'));
-    });
-    back.on('pointerover', () => { back.setColor('#ff85c1'); back.setBackgroundColor('#2a0055aa'); });
-    back.on('pointerout',  () => { back.setColor('#9b72ff'); back.setBackgroundColor('#1a0033aa'); });
+    }, { bgColor: 0x9b72ff, fontSize: 16 });
   }
 }

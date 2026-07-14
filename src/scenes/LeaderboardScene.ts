@@ -2,6 +2,7 @@
 import Phaser from 'phaser';
 import { LeaderboardService, type LeaderboardEntry } from '../utils/LeaderboardService';
 import { audio } from '../audio';
+import { createCartoonButton } from '../utils/IsoHelper';
 
 export class LeaderboardScene extends Phaser.Scene {
   private listContainer!: Phaser.GameObjects.Container;
@@ -32,13 +33,10 @@ export class LeaderboardScene extends Phaser.Scene {
     }).setOrigin(0.5);
 
     // Close / Back button
-    const closeBtn = this.add.text(45, 35, '◀ Menu', {
-      fontFamily: 'Orbitron', fontSize: '16px', color: '#9b72ff',
-      backgroundColor: '#1a0033aa', padding: { x: 12, y: 8 }
-    }).setOrigin(0.5).setInteractive({ useHandCursor: true });
-    closeBtn.on('pointerdown', () => { audio.playTap(); this.scene.start('Menu'); });
-    closeBtn.on('pointerover', () => { closeBtn.setColor('#ff85c1'); closeBtn.setBackgroundColor('#2a0055aa'); });
-    closeBtn.on('pointerout',  () => { closeBtn.setColor('#9b72ff'); closeBtn.setBackgroundColor('#1a0033aa'); });
+    createCartoonButton(this, 75, 38, 100, 42, '◀ Menu', () => {
+      audio.playTap();
+      this.scene.start('Menu');
+    }, { bgColor: 0x9b72ff, fontSize: 16 });
 
     // Live sync banner at bottom
     const bottomY = H - 36;

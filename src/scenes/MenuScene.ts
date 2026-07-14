@@ -1,6 +1,6 @@
 /* MenuScene.ts — Animated splash screen with floating isometric buddy blocks */
 import Phaser from 'phaser';
-import { TILE_W, TILE_H, BLOCK_H, getBlockPalette, drawHat, drawIsoCube, drawCartoonCosmicBg, createCosmicEffects } from '../utils/IsoHelper';
+import { TILE_W, TILE_H, BLOCK_H, getBlockPalette, drawHat, drawIsoCube, drawCartoonCosmicBg, createCosmicEffects, blendColor } from '../utils/IsoHelper';
 import { GameData } from '../utils/GameData';
 import { audio } from '../audio';
 
@@ -228,70 +228,117 @@ export class MenuScene extends Phaser.Scene {
     fillCol: number, glowCol: number,
     label: string, delay: number
   ): Phaser.GameObjects.Container {
+    void glowCol;
     const container = this.add.container(x, y).setAlpha(0).setDepth(10);
-
-    const g = this.add.graphics();
-    const draw = (hover: boolean) => {
-      g.clear();
-      // Shadow
-      g.fillStyle(glowCol, 0.25);
-      g.fillRoundedRect(-w / 2 + 2, -h / 2 + 6, w, h, h / 2);
-      // Button bg
-      g.fillStyle(hover ? fillCol : Phaser.Display.Color.ValueToColor(fillCol).darken(15).color, 1);
-      g.fillRoundedRect(-w / 2, -h / 2, w, h, h / 2);
-      // Glow outline
-      for (let pass = 0; pass < 3; pass++) {
-        g.lineStyle([4, 2.5, 1.5][pass], glowCol, [0.15, 0.35, 0.7][pass]);
-        g.strokeRoundedRect(-w / 2, -h / 2, w, h, h / 2);
-      }
-    };
-
-    draw(false);
-
-    // Dynamic font size: fits text inside button (38% of height, capped by width)
-    const labelLen  = label.replace(/\p{Emoji}/gu, '  ').length; // emoji ≈ 2 chars wide
-    const maxByH    = Math.round(h * 0.42);
-    const maxByW    = Math.round(w / Math.max(labelLen * 0.52, 1));
-    const fontSize  = Math.min(maxByH, maxByW, 22);
-
-    const text = this.add.text(0, 0, label, {
-      fontFamily: 'Orbitron',
-      fontSize: `${fontSize}px`,
-      color: '#ffffff',
-      stroke: '#000000', strokeThickness: 1.5,
-      align: 'center'
-    }).setOrigin(0.5);
-
-    container.add([g, text]);
-
-    // Set container interactive
+    container.setSize(w, h);
     container.setInteractive(new Phaser.Geom.Rectangle(-w / 2, -h / 2, w, h), Phaser.Geom.Rectangle.Contains);
     container.input!.cursor = 'pointer';
 
+    const bg = this.add.graphics();
+    container.add(bg);
+
+    const labelLen = label.replace(/\p{Emoji}/gu, '  ').length;
+    const maxByH   = Math.round(h * 0.42);
+    const maxByW   = Math.round(w / Math.max(labelLen * 0.52, 1));
+    const fontSize = Math.min(maxByH, maxByW, 22);
+
+    const txt = this.add.text(0, -2, label, {
+      fontFamily: 'Orbitron',
+      fontSize: `${fontSize}px`,
+      color: '#ffffff',
+      stroke: '#000000', strokeThickness: 2.2,
+      align: 'center'
+    }).setOrigin(0.5);
+    container.add(txt);
+
+    const faceCol = fillCol;
+    const shadowCol = blendColor(faceCol, 0x000000, 0.4);
+    const r = h / 2;
+
+    const draw = (state: 'idle' | 'hover' | 'pressed') => {
+      bg.clear();
+      
+      let faceY = -h / 2;
+      let shH = 6;
+      
+      if (state === 'pressed') {
+        faceY = -h / 2 + 4;
+        shH = 2;
+        txt.setY(2);
+      } else {
+        txt.setY(-2);
+      }
+
+      const faceBright = state === 'hover' ? blendColor(faceCol, 0xffffff, 0.15) : faceCol;
+
+      // 1. Draw 3D shadow/thickness (Darker bottom layer)
+      bg.fillStyle(shadowCol, 1);
+      bg.fillRoundedRect(-w / 2, -h / 2 + shH, w, h, r);
+
+      // 2. Draw Main top face
+      bg.fillStyle(faceBright, 1);
+      bg.fillRoundedRect(-w / 2, faceY, w, h, r);
+
+      // 3. Highlight Bevel
+      bg.lineStyle(1.8, 0xffffff, 0.4);
+      bg.beginPath();
+      bg.moveTo(-w / 2 + r, faceY + 1.2);
+      bg.lineTo(w / 2 - r, faceY + 1.2);
+      bg.strokePath();
+    };
+
+    draw('idle');
+
     container.on('pointerover', () => {
-      draw(true);
+      draw('hover');
       this.tweens.add({
         targets: container,
-        scale: 1.06,
-        duration: 150,
-        ease: 'Quad.easeOut',
-        overwrite: true
-      });
-    });
-    container.on('pointerout', () => {
-      draw(false);
-      this.tweens.add({
-        targets: container,
-        scale: 1.0,
-        duration: 150,
-        ease: 'Quad.easeOut',
+        scaleX: 1.05,
+        scaleY: 1.05,
+        duration: 100,
+        ease: 'Quad.Out',
         overwrite: true
       });
     });
 
-    // Animate in
+    container.on('pointerout', () => {
+      draw('idle');
+      this.tweens.add({
+        targets: container,
+        scaleX: 1.0,
+        scaleY: 1.0,
+        duration: 100,
+        ease: 'Quad.Out',
+        overwrite: true
+      });
+    });
+
+    container.on('pointerdown', () => {
+      draw('pressed');
+      this.tweens.add({
+        targets: container,
+        scaleX: 0.96,
+        scaleY: 0.96,
+        duration: 50,
+        ease: 'Quad.Out',
+        overwrite: true
+      });
+    });
+
+    container.on('pointerup', () => {
+      draw('hover');
+      this.tweens.add({
+        targets: container,
+        scaleX: 1.05,
+        scaleY: 1.05,
+        duration: 80,
+        ease: 'Quad.Out',
+        overwrite: true
+      });
+    });
+
+    // Entrance and idle float
     this.tweens.add({ targets: container, alpha: 1, duration: 500, delay: 800 + delay, ease: 'Back.Out' });
-    // Bounce idle
     this.tweens.add({ targets: container, y: y - 4, duration: 1400 + delay * 0.5, yoyo: true, repeat: -1, ease: 'Sine.InOut', delay: 1400 });
 
     return container;

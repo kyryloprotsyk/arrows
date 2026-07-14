@@ -3,6 +3,7 @@ import Phaser from 'phaser';
 import { GameData } from '../utils/GameData';
 import { audio } from '../audio';
 import { AdManager } from '../utils/AdManager';
+import { createCartoonButton } from '../utils/IsoHelper';
 
 const SKINS = [
   { id: 'none',     name: 'No Hat',      emoji: '😊', rarity: 'common',    hue: 200 },
@@ -64,17 +65,11 @@ export class ShopScene extends Phaser.Scene {
     this.createWardrobeGrid(gridX, gridY, W, H);
 
     // Back button
-    const back = this.add.text(45, 35, '◀ Back', {
-      fontFamily: 'Orbitron', fontSize: '18px', color: '#9b72ff',
-      backgroundColor: '#1a0033aa', padding: { x: 12, y: 8 }
-    }).setOrigin(0.5).setInteractive({ useHandCursor: true });
-    back.on('pointerdown', () => {
+    createCartoonButton(this, 75, 38, 100, 42, '◀ Back', () => {
       audio.playTap();
       this.cameras.main.fadeOut(300, 10, 0, 26);
       this.time.delayedCall(320, () => this.scene.start('Menu'));
-    });
-    back.on('pointerover', () => { back.setColor('#ff85c1'); back.setBackgroundColor('#2a0055aa'); });
-    back.on('pointerout',  () => { back.setColor('#9b72ff'); back.setBackgroundColor('#1a0033aa'); });
+    }, { bgColor: 0x9b72ff, fontSize: 16 });
   }
 
   private createGachaMachine(cx: number, cy: number, W: number, _H: number) {
@@ -124,32 +119,10 @@ export class ShopScene extends Phaser.Scene {
     // Spin button
     const spinBtnY = cy + machineH / 2 + 28;
     const spinBtnW = machineW * 0.95;
-    const spinBtn  = this.add.graphics().setDepth(4);
     const spinBtnH = 48;
-    const spinFontSize = Math.min(Math.round(spinBtnH * 0.32), Math.round(spinBtnW / Math.max('Spin! 🎰  🪙100'.length * 0.48, 1)), 16);
-    const spinTxt_ = this.add.text(cx, spinBtnY, `Spin! 🎰\n🪙${GACHA_COST}`, {
-      fontFamily: 'Orbitron', fontSize: `${spinFontSize}px`, color: '#ffffff', align: 'center', fontStyle: 'bold'
-    }).setOrigin(0.5).setDepth(5);
-    void spinTxt_;
+    const spinFontSize = Math.min(Math.round(spinBtnH * 0.32), Math.round(spinBtnW / Math.max('Spin! 🎰  🪙100'.length * 0.48, 1)), 15);
 
-    const drawSpinBtn = (hover: boolean) => {
-      spinBtn.clear();
-      spinBtn.fillStyle(0xff6eb4, hover ? 1 : 0.8);
-      spinBtn.fillRoundedRect(cx - spinBtnW / 2, spinBtnY - spinBtnH / 2, spinBtnW, spinBtnH, 14);
-      for (let p = 0; p < 3; p++) {
-        spinBtn.lineStyle([5, 3, 1.5][p], 0xff0088, [0.1, 0.25, 0.6][p]);
-        spinBtn.strokeRoundedRect(cx - spinBtnW / 2, spinBtnY - spinBtnH / 2, spinBtnW, spinBtnH, 14);
-      }
-    };
-    drawSpinBtn(false);
-
-    spinBtn.setInteractive(
-      new Phaser.Geom.Rectangle(cx - spinBtnW / 2, spinBtnY - spinBtnH / 2, spinBtnW, spinBtnH),
-      Phaser.Geom.Rectangle.Contains
-    );
-    spinBtn.on('pointerover', () => drawSpinBtn(true));
-    spinBtn.on('pointerout',  () => drawSpinBtn(false));
-    spinBtn.on('pointerdown', () => {
+    createCartoonButton(this, cx, spinBtnY, spinBtnW, spinBtnH, `Spin! 🎰\n🪙${GACHA_COST}`, () => {
       if (this.machineSpinning) return;
       if (GameData.coins.get() < GACHA_COST) {
         this.showToast('😅 Not enough coins! Play more levels!');
@@ -158,43 +131,21 @@ export class ShopScene extends Phaser.Scene {
       GameData.coins.add(-GACHA_COST);
       this.coinText.setText(`🪙 ${GameData.coins.get()} Coins`);
       this.spinGacha(capsuleY);
-    });
+    }, { bgColor: 0xff6eb4, fontSize: spinFontSize, depth: 4 });
 
     // Free Spin Ad Button
     const adSpinY = spinBtnY + 54;
-    const adSpinH = 36;
-    const adFontSize = Math.min(Math.round(adSpinH * 0.38), Math.round(spinBtnW / Math.max('🎬 Watch Ad Free Spin!'.length * 0.5, 1)), 13);
-    const adSpinBtn = this.add.graphics().setDepth(4);
-    const adSpinTxt = this.add.text(cx, adSpinY, `🎬 Watch Ad Free Spin!`, {
-      fontFamily: 'Orbitron', fontSize: `${adFontSize}px`, color: '#0a001a', fontStyle: 'bold', align: 'center'
-    }).setOrigin(0.5).setDepth(5);
-    void adSpinTxt;
+    const adSpinH = 38;
+    const adFontSize = Math.min(Math.round(adSpinH * 0.38), Math.round(spinBtnW / Math.max('🎬 Watch Ad Free Spin!'.length * 0.5, 1)), 12);
 
-    const drawAdSpin = (hover: boolean) => {
-      adSpinBtn.clear();
-      adSpinBtn.fillStyle(0x00ffcc, hover ? 1 : 0.85);
-      adSpinBtn.fillRoundedRect(cx - spinBtnW / 2, adSpinY - adSpinH / 2, spinBtnW, adSpinH, 12);
-      for (let p = 0; p < 3; p++) {
-        adSpinBtn.lineStyle([4, 2, 1][p], 0x00aa88, [0.2, 0.4, 0.8][p]);
-        adSpinBtn.strokeRoundedRect(cx - spinBtnW / 2, adSpinY - adSpinH / 2, spinBtnW, adSpinH, 12);
-      }
-    };
-    drawAdSpin(false);
-
-    adSpinBtn.setInteractive(
-      new Phaser.Geom.Rectangle(cx - spinBtnW / 2, adSpinY - adSpinH / 2, spinBtnW, adSpinH),
-      Phaser.Geom.Rectangle.Contains
-    );
-    adSpinBtn.on('pointerover', () => drawAdSpin(true));
-    adSpinBtn.on('pointerout',  () => drawAdSpin(false));
-    adSpinBtn.on('pointerdown', async () => {
+    createCartoonButton(this, cx, adSpinY, spinBtnW, adSpinH, `🎬 Watch Ad Free Spin!`, async () => {
       if (this.machineSpinning) return;
       audio.playTap();
       const success = await AdManager.showRewardedAd('free_spin');
       if (success) {
         this.spinGacha(capsuleY);
       }
-    });
+    }, { bgColor: 0x00ffcc, textColor: '#0a001a', fontSize: adFontSize, depth: 4 });
 
     // Animate capsule idle rotation
     let t = 0;
