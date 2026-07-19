@@ -1,5 +1,7 @@
-/* GameScene.ts — Main isometric 3D puzzle scene with Phaser 3 */
-import Phaser from 'phaser';
+import type { IGameScene } from '../babylon/SceneManager';
+import { PhaserMock, PhaserMath } from '../babylon/PhaserMock';
+import { levelGenerator } from '../levelGenerator';
+import type { BlockConfig, LevelData } from '../levelGenerator';
 import {
   TILE_W, TILE_H,
   getTileW, getTileH, getBlockH,
@@ -8,11 +10,12 @@ import {
   drawCartoonCosmicBg, createCosmicEffects, blendColor,
   createCartoonButton
 } from '../utils/IsoHelper';
-import { levelGenerator } from '../levelGenerator';
-import type { BlockConfig, LevelData } from '../levelGenerator';
+import { HUD } from '../babylon/HUD';
 import { GameData } from '../utils/GameData';
 import { LeaderboardService } from '../utils/LeaderboardService';
 import { audio } from '../audio';
+import type { Scene as BjsScene } from '@babylonjs/core';
+import { BabylonBlockScene } from '../babylon/BabylonBlockScene';
 
 interface BuddyBlock extends BlockConfig {
   // Screen-space position (for animation)
@@ -43,7 +46,8 @@ interface BuddyBlock extends BlockConfig {
   escapeGridDir?: { x: number, y: number, z: number };
 }
 
-export class GameScene extends Phaser.Scene {
+export class GameScene extends PhaserMock implements IGameScene {
+  key = 'Game';
   // ── State ─────────────────────────────────────────────────────────────
   private worldIndex = 1;
   private levelIndex = 1;
@@ -100,19 +104,14 @@ export class GameScene extends Phaser.Scene {
   private materialShatterEmitters!: Record<number, Array<{ emitter: Phaser.GameObjects.Particles.ParticleEmitter, count: number }>>;
 
   // ── HUD ───────────────────────────────────────────────────────────────
-  private hudCoins!: Phaser.GameObjects.Text;
-  private hudMoves!: Phaser.GameObjects.Text;
-  private hudLevel!: Phaser.GameObjects.Text;
-  private hudPar!: Phaser.GameObjects.Text;
-  private hudBar!: Phaser.GameObjects.Graphics;
-  private comboLabel!: Phaser.GameObjects.Text;
-  private tutLabel!: Phaser.GameObjects.Text;
+  private hud = new HUD();
+  private babylonScene!: BjsScene;
 
-  constructor() { super({ key: 'Game' }); }
+  constructor() { super(); }
 
-  init(data: { world?: number; level?: number; isDaily?: boolean }) {
-    this.worldIndex = data.world ?? GameData.world.get();
-    this.levelIndex = data.level ?? GameData.level.get();
+  init(data: any) {
+    this.worldIndex = data?.world ?? 1;
+    this.levelIndex = data?.level ?? 1;
     this.isDaily = !!data.isDaily;
     this.coins = GameData.coins.get();
     this.rotState = 0;
@@ -122,7 +121,8 @@ export class GameScene extends Phaser.Scene {
     this.activeSkin = GameData.activeSkin.get();
   }
 
-  create() {
+  create(scene: BjsScene, _data: any) {
+    this.babylonScene = scene;
     const W = this.scale.width, H = this.scale.height;
     this.centerX = W / 2;
     this.centerY = H / 2;
@@ -159,14 +159,16 @@ export class GameScene extends Phaser.Scene {
     if (!GameData.muted.get()) audio.playBGM();
 
     // ── Responsive: redraw background on orientation / resize ────────────
-    this.scale.on('resize', (gs: Phaser.Structs.Size) => {
-      const nW = gs.width, nH = gs.height;
-      this.centerX = nW / 2;
-      this.centerY = nH / 2;
-      const worldHues: Record<number, number> = { 1: 330, 2: 175, 3: 270, 4: 195, 5: 210, 6: 15 };
-      const wHue = worldHues[this.worldIndex] ?? 280;
-      drawCartoonCosmicBg(this.bgGfx, nW, nH, wHue);
-    });
+    if ((this.scale as any).on) {
+      (this.scale as any).on('resize', (gs: Phaser.Structs.Size) => {
+        const nW = gs.width, nH = gs.height;
+        this.centerX = nW / 2;
+        this.centerY = nH / 2;
+        const worldHues: Record<number, number> = { 1: 330, 2: 175, 3: 270, 4: 195, 5: 210, 6: 15 };
+        const wHue = worldHues[this.worldIndex] ?? 280;
+        drawCartoonCosmicBg(this.bgGfx, nW, nH, wHue);
+      });
+    }
   }
 
   // ═══════════════════════════════════════════════════════════════════════
@@ -225,6 +227,9 @@ export class GameScene extends Phaser.Scene {
       if (b.y < current) this.floorHeights.set(key, b.y);
     }
 
+    // 3D Scene Initialization
+    BabylonBlockScene.create(this.babylonScene, this.levelGridCoords, this.worldIndex);
+
     // Camera cinematic intro: start zoomed out, pan to cluster, zoom in
     this.recalcCenter();
     const targetPanX = -this.getClusterCenter().cx;
@@ -244,8 +249,8 @@ export class GameScene extends Phaser.Scene {
     this.showTutorial(world, level);
 
     // Listen for resume from DefeatScene
-    this.events.on('resume', (_sys: Phaser.Scenes.Systems, data: any) => {
-      if (data && data.bonusMoves) {
+    this.events.on('resume', (_sys: any, data: any) => {
+      if (data?.bonusMoves) {
         this.movesLeft += data.bonusMoves;
         this.movesTotal += data.bonusMoves;
         this.updateHUD();
@@ -342,7 +347,8 @@ export class GameScene extends Phaser.Scene {
 
     // Pinch zoom (touch)
     this.input.on('pointermove', (_p: Phaser.Input.Pointer) => {
-      if (this.input.pointer1.isDown && this.input.pointer2.isDown) {
+      const ptrActive = (this.input.activePointer as any).active ?? this.input.activePointer.isDown;
+      if (ptrActive && !this.input.activePointer.isDown) {
         const d = Phaser.Math.Distance.Between(
           this.input.pointer1.x, this.input.pointer1.y,
           this.input.pointer2.x, this.input.pointer2.y
@@ -350,7 +356,7 @@ export class GameScene extends Phaser.Scene {
         if (this.pinchDist0 === 0) {
           this.pinchDist0 = d;
         } else {
-          this.zoomTarget = Phaser.Math.Clamp(this.camZoom * (d / this.pinchDist0), 0.45, 2.2);
+          this.zoomTarget = PhaserMath.Clamp(this.camZoom * (d / this.pinchDist0), 0.45, 2.2);
         }
       } else {
         this.pinchDist0 = 0;
@@ -359,7 +365,7 @@ export class GameScene extends Phaser.Scene {
 
     // Scroll wheel zoom
     this.input.on('wheel', (_: any, __: any, ___: any, dy: number) => {
-      this.zoomTarget = Phaser.Math.Clamp(this.zoomTarget - dy * 0.001, 0.45, 2.2);
+      this.zoomTarget = PhaserMath.Clamp(this.zoomTarget - dy * 0.001, 0.45, 2.2);
     });
 
     // Keyboard shortcuts
@@ -701,7 +707,7 @@ export class GameScene extends Phaser.Scene {
       this.time.delayedCall(1500, () => {
         if (this.buddies.some(b => b.state !== 'escaping')) {
           this.triggerHaptic([100, 50, 100]);
-          this.scene.pause();
+          (this.scene as any).sleep('Game');
           this.scene.launch('Defeat', { world: this.worldIndex, level: this.levelIndex, isDaily: this.isDaily });
         }
       });
@@ -806,9 +812,9 @@ export class GameScene extends Phaser.Scene {
     // Equivalent to CSS: transition: all 0.12s ease-out
     const panDecay  = 1 - Math.exp(-dt / 0.12);
     const zoomDecay = 1 - Math.exp(-dt / 0.10);
-    this.panX  = Phaser.Math.Linear(this.panX,  this.panTargetX, panDecay);
-    this.panY  = Phaser.Math.Linear(this.panY,  this.panTargetY, panDecay);
-    this.camZoom = Phaser.Math.Linear(this.camZoom, this.zoomTarget, zoomDecay);
+    this.panX  = PhaserMath.Linear(this.panX,  this.panTargetX, panDecay);
+    this.panY  = PhaserMath.Linear(this.panY,  this.panTargetY, panDecay);
+    this.camZoom = PhaserMath.Linear(this.camZoom, this.zoomTarget, zoomDecay);
 
     // Parallax background layer shift
     if (this.cosmicGfx) {
@@ -822,7 +828,7 @@ export class GameScene extends Phaser.Scene {
 
     this.hoveredBuddy = null;
     const hudHCheck = Math.max(44, Math.min(this.scale.width, this.scale.height) * 0.12);
-    if (pointer.active && pointer.y >= hudHCheck) {
+    if (((pointer as any).active ?? true) && pointer.y >= hudHCheck) {
       const sorted = [...this.buddies]
         .filter(b => b.state !== 'escaping')
         .sort((a, b2) => b2.depth - a.depth);
@@ -903,9 +909,9 @@ export class GameScene extends Phaser.Scene {
         if (isHovered) {
           // Organic jelly wiggle motion
           const wobble = Math.sin(_time * 0.015) * 0.08;
-          b.jellyScalePara = Phaser.Math.Linear(b.jellyScalePara, 1.0 + wobble, 0.2);
-          b.jellyScalePerp = Phaser.Math.Linear(b.jellyScalePerp, 1.0 - wobble, 0.2);
-          b.jellyAngle = Phaser.Math.Linear(b.jellyAngle, Math.sin(_time * 0.01) * 0.06, 0.2);
+          b.jellyScalePara = PhaserMath.Linear(b.jellyScalePara, 1.0 + wobble, 0.2);
+          b.jellyScalePerp = PhaserMath.Linear(b.jellyScalePerp, 1.0 - wobble, 0.2);
+          b.jellyAngle = PhaserMath.Linear(b.jellyAngle, Math.sin(_time * 0.01) * 0.06, 0.2);
         } else {
           // Default breathing wave
           const breathSpeed = 0.0035;
@@ -913,9 +919,9 @@ export class GameScene extends Phaser.Scene {
           const phaseOffset = (b.x * 3.5 + b.y * 7.1 + b.z * 11.3) * 0.4;
           const breath = Math.sin(this.time.now * breathSpeed + phaseOffset) * breathAmp;
 
-          b.jellyScalePara = Phaser.Math.Linear(b.jellyScalePara, 1.0 + breath, 0.1);
-          b.jellyScalePerp = Phaser.Math.Linear(b.jellyScalePerp, 1.0 - breath, 0.1);
-          b.jellyAngle = Phaser.Math.Linear(b.jellyAngle, Math.PI / 2, 0.1);
+          b.jellyScalePara = PhaserMath.Linear(b.jellyScalePara, 1.0 + breath, 0.1);
+          b.jellyScalePerp = PhaserMath.Linear(b.jellyScalePerp, 1.0 - breath, 0.1);
+          b.jellyAngle = PhaserMath.Linear(b.jellyAngle, Math.PI / 2, 0.1);
         }
 
         // Blink logic
@@ -928,13 +934,13 @@ export class GameScene extends Phaser.Scene {
       } else if (b.state === 'locked') {
         if (isHovered) {
           const wobble = Math.sin(_time * 0.015) * 0.04;
-          b.jellyScalePara = Phaser.Math.Linear(b.jellyScalePara, 1.0 + wobble, 0.2);
-          b.jellyScalePerp = Phaser.Math.Linear(b.jellyScalePerp, 1.0 - wobble, 0.2);
-          b.jellyAngle = Phaser.Math.Linear(b.jellyAngle, Math.sin(_time * 0.01) * 0.03, 0.2);
+          b.jellyScalePara = PhaserMath.Linear(b.jellyScalePara, 1.0 + wobble, 0.2);
+          b.jellyScalePerp = PhaserMath.Linear(b.jellyScalePerp, 1.0 - wobble, 0.2);
+          b.jellyAngle = PhaserMath.Linear(b.jellyAngle, Math.sin(_time * 0.01) * 0.03, 0.2);
         } else {
-          b.jellyScalePara = Phaser.Math.Linear(b.jellyScalePara, 1.0, 0.1);
-          b.jellyScalePerp = Phaser.Math.Linear(b.jellyScalePerp, 1.0, 0.1);
-          b.jellyAngle = Phaser.Math.Linear(b.jellyAngle, 0.0, 0.1);
+          b.jellyScalePara = PhaserMath.Linear(b.jellyScalePara, 1.0, 0.1);
+          b.jellyScalePerp = PhaserMath.Linear(b.jellyScalePerp, 1.0, 0.1);
+          b.jellyAngle = PhaserMath.Linear(b.jellyAngle, 0.0, 0.1);
         }
       }
     }
@@ -998,6 +1004,17 @@ export class GameScene extends Phaser.Scene {
   // Rendering
   // ═══════════════════════════════════════════════════════════════════════
   private draw() {
+    // 3D sync
+    BabylonBlockScene.syncBlocks(
+      this.buddies,
+      this.rotState,
+      this.camZoom,
+      this.panX,
+      this.panY,
+      this.scale.width,
+      this.scale.height
+    );
+
     const g = this.blockGfx;
     g.clear();
 
@@ -1822,142 +1839,34 @@ export class GameScene extends Phaser.Scene {
   // HUD
   // ═══════════════════════════════════════════════════════════════════════
   private setupHUD(W: number, H: number) {
-    // Compute responsive sizes from vmin (shortest screen edge)
-    const vmin = Math.min(W, H);
-    const hudH  = Math.max(44, vmin * 0.12);      // HUD bar height
-    const hudY  = hudH / 2;                        // vertical center of bar
-    const fs    = Math.round(Math.min(vmin * 0.048, 22)); // main HUD font
-    const comboFs = Math.round(Math.min(vmin * 0.1, 42)); // combo font
-    const msgFs   = Math.round(Math.min(vmin * 0.038, 16)); // tip font
-    const btnFs   = Math.round(Math.min(vmin * 0.072, 28)); // button emoji font
-    const pad   = Math.max(14, vmin * 0.04);       // horizontal padding
-
-    // Bottom safe area (for iOS home indicator etc.)
-    const safeBottom = 24;
-    const btnY = H - safeBottom - Math.max(24, vmin * 0.06);
-
-    // HUD background bar
-    this.hudBar = this.add.graphics().setDepth(20);
-    this.drawHUDBar(W, hudH);
-
-    this.hudLevel = this.add.text(W / 2, hudY, '', {
-      fontFamily: 'Orbitron', fontSize: fs + 'px', color: '#ffffff',
-      shadow: { offsetX: 0, offsetY: 2, color: '#6600ff', blur: 10, fill: true }
-    }).setOrigin(0.5).setDepth(21);
-
-    this.hudCoins = this.add.text(pad, hudY, '🪙 0', {
-      fontFamily: 'Orbitron', fontSize: fs + 'px', color: '#ffe45e'
-    }).setOrigin(0, 0.5).setDepth(21);
-
-    this.hudMoves = this.add.text(W - pad, hudY, '⚡ 0', {
-      fontFamily: 'Orbitron', fontSize: fs + 'px', color: '#74c0fc'
-    }).setOrigin(1, 0.5).setDepth(21);
-
-    // Par indicator (shown below moves counter on right side)
-    this.hudPar = this.add.text(W - pad, hudH + 6, 'PAR', {
-      fontFamily: 'Orbitron', fontSize: Math.round(fs * 0.65) + 'px', color: '#ffe45e',
-      backgroundColor: '#00000066', padding: { x: 6, y: 2 }
-    }).setOrigin(1, 0).setDepth(21);
-
-    // Combo label
-    this.comboLabel = this.add.text(W / 2, H * 0.18, '', {
-      fontFamily: 'Orbitron', fontSize: comboFs + 'px',
-      color: '#ffe45e', stroke: '#ffffff', strokeThickness: 3,
-      shadow: { offsetX: 0, offsetY: 5, color: '#ff8800', blur: 20, fill: true }
-    }).setOrigin(0.5).setDepth(21).setAlpha(0);
-
-    // Tutorial/message label — above the bottom buttons
-    this.tutLabel = this.add.text(W / 2, btnY - 36, '', {
-      fontFamily: 'Orbitron', fontSize: msgFs + 'px', color: '#ccbbff',
-      backgroundColor: '#22004488', padding: { x: 12, y: 6 }
-    }).setOrigin(0.5).setDepth(21).setAlpha(0);
-
-    // Buttons: Home, Reset, Rotate — properly sized, spaced, and styled in 3D cartoon fashion
-    const btnSize = Math.max(38, btnFs * 1.4);
-    const homeX = W - pad - btnSize * 0.5;
-    createCartoonButton(this, homeX, btnY, btnSize, btnSize, '🏠', () => {
-      audio.playTap();
-      this.goToWorldSelect();
-    }, { bgColor: 0xff5555, fontSize: Math.round(btnSize * 0.55) });
-
-    const resetX = homeX - btnSize * 1.25;
-    createCartoonButton(this, resetX, btnY, btnSize, btnSize, '🔄', () => {
-      audio.playTap();
-      this.resetLevel();
-    }, { bgColor: 0x50fa7b, fontSize: Math.round(btnSize * 0.55) });
-
-    // Rotation arrows — side of screen, vertically centered
-    const arrowW = Math.max(32, btnFs * 1.2);
-    const arrowH = Math.max(42, btnFs * 1.6);
-    createCartoonButton(this, pad + arrowW * 0.5, H / 2, arrowW, arrowH, '◀', () => {
-      audio.playTap();
-      this.rotateView(-1);
-    }, { bgColor: 0x9b72ff, fontSize: Math.round(arrowW * 0.55) });
-
-    createCartoonButton(this, W - pad - arrowW * 0.5, H / 2, arrowW, arrowH, '▶', () => {
-      audio.playTap();
-      this.rotateView(1);
-    }, { bgColor: 0x9b72ff, fontSize: Math.round(arrowW * 0.55) });
-  }
-
-  private drawHUDBar(W: number, hudH = 50) {
-    this.hudBar.clear();
-    this.hudBar.fillStyle(0x0a001a, 0.85);
-    this.hudBar.fillRect(0, 0, W, hudH);
-    this.hudBar.lineStyle(1, 0x9b72ff, 0.3);
-    this.hudBar.lineBetween(0, hudH, W, hudH);
+    this.hud.init(
+      () => this.goToWorldSelect(),
+      () => this.resetLevel(),
+      () => this.rotateView(-1),
+      () => this.rotateView(1)
+    );
   }
 
   private updateHUD() {
-    if (this.isDaily) {
-      this.hudLevel.setText(`📅 Daily Challenge — Day ${GameData.dailyStreak.get()}`);
-    } else {
-      this.hudLevel.setText(`${this.levelData.worldName} — Lvl ${this.levelIndex}`);
-    }
-    this.hudCoins.setText(`🪙 ${GameData.coins.get()}`);
-    this.hudMoves.setText(`⚡ ${this.movesLeft}`);
-
-    // Par indicator
-    if (this.hudPar) {
-      const parDiff = this.movesLeft - (this.movesTotal - this.parTotal);
-      if (parDiff > 0) {
-        this.hudPar.setText(`PAR -${parDiff}`).setColor('#00ffcc');
-      } else if (parDiff === 0) {
-        this.hudPar.setText('PAR').setColor('#ffe45e');
-      } else {
-        this.hudPar.setText(`PAR +${Math.abs(parDiff)}`).setColor('#ff6b6b');
-      }
-    }
-
-    // Red tint moves when low
-    this.hudMoves.setColor(this.movesLeft <= 3 ? '#ff6b6b' : '#74c0fc');
+    this.hud.update(
+      this.levelData.worldName,
+      this.levelIndex,
+      this.movesLeft,
+      this.isDaily
+    );
   }
 
   private showCombo() {
-    const msgs = ['', '🔥 COMBO x2! +10🪙', '⚡ COMBO x3! +15🪙', '💥 x4 INSANE! +20🪙', '🌈 MEGA COMBO! +25🪙'];
-    const msg = msgs[Math.min(this.comboCount - 1, msgs.length - 1)];
-    this.comboLabel.setText(msg).setAlpha(1).setScale(0.5);
-    this.tweens.add({
-      targets: this.comboLabel,
-      scaleX: 1.1, scaleY: 1.1, duration: 250, ease: 'Back.Out',
-      onComplete: () => {
-        this.tweens.add({ targets: this.comboLabel, alpha: 0, duration: 800, delay: 600 });
-      }
-    });
-
-    if (this.comboCount >= 2) {
-      const bonus = this.comboCount * 5;
+    const bonus = this.comboCount >= 2 ? this.comboCount * 5 : 0;
+    if (bonus > 0) {
       GameData.coins.add(bonus);
       this.coins += bonus;
-      this.updateHUD();
-      this.cameras.main.shake(140, 0.005 * Math.min(this.comboCount, 4));
     }
+    this.hud.showCombo(this.comboCount, bonus);
   }
 
   private showMsg(msg: string) {
-    this.tutLabel.setText(msg).setAlpha(1);
-    this.tweens.killTweensOf(this.tutLabel);
-    this.tweens.add({ targets: this.tutLabel, alpha: 0, delay: 3500, duration: 600 });
+    this.hud.showMsg(msg);
   }
 
   private showTutorial(w: number, l: number) {

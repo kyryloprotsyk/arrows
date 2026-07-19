@@ -1,4 +1,4 @@
-/* Arrow Buddies 3D — Mobile-first CSS for Phaser canvas */
+/* Arrow Buddies 3D — Mobile-first CSS for Pure Babylon.js */
 *, *::before, *::after {
   margin: 0;
   padding: 0;
@@ -26,27 +26,11 @@ body {
   -webkit-text-size-adjust: 100%;
 }
 
-/* Game container fills the safe area (notch-aware) */
-#game-container {
-  position: absolute;
-  left: 50%;
-  top: 50%;
-  transform: translate(-50%, -50%);
-  width: 100dvw;
-  height: 100dvh;
-  /* Enforce aspect-ratio constraints for portrait layouts (between 9:21 and 3:4) */
-  max-width: calc(100dvh * 0.75);
-  max-height: calc(100dvw / 0.428);
-  box-shadow: 0 0 50px rgba(0, 0, 0, 0.9);
-  background: #0a001a;
-  overflow: hidden;
-}
-
-/* Canvas always fills the container exactly — Phaser handles aspect ratio */
-#game-container canvas {
+#babylon-canvas {
   display: block;
   width: 100% !important;
   height: 100% !important;
+  outline: none;
   /* Crisp pixel rendering on high-DPR screens */
   image-rendering: -webkit-optimize-contrast;
   image-rendering: pixelated;

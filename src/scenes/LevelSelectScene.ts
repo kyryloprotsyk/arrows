@@ -1,332 +1,139 @@
-/* LevelSelectScene.ts — 3D Level selector roadmap with soft-body wiggling nodes */
-import Phaser from 'phaser';
+/* LevelSelectScene.ts — Babylon.js level selection grid */
+import type { IGameScene } from '../babylon/SceneManager';
+import { BabylonGUI } from '../babylon/BabylonGUI';
+import { SceneManager } from '../babylon/SceneManager';
+import { TweenManager } from '../babylon/TweenManager';
+import { BabylonBackground } from '../babylon/BabylonBackground';
 import { GameData } from '../utils/GameData';
 import { audio } from '../audio';
-import {
-  TILE_W, TILE_H, BLOCK_H,
-  drawIsoCube, drawHat, hslToInt,
-  drawCartoonCosmicBg, createCosmicEffects,
-  createCartoonButton
-} from '../utils/IsoHelper';
+import { Control, TextBlock, Rectangle, Button, StackPanel, ScrollViewer } from '@babylonjs/gui';
+import type { Scene as BjsScene } from '@babylonjs/core';
+import { hslToInt } from '../utils/IsoHelper';
 
-interface LevelNode {
-  levelIdx: number;
-  x: number;
-  y: number;
-  cy: number;
-  unlocked: boolean;
-  stars: number;
-  state: 'idle' | 'wiggle' | 'launch';
-  animT: number;
-  scalePara: number;
-  scalePerp: number;
-  angle: number;
-  bumpDy: number;
-  numTxt?: Phaser.GameObjects.Text;
-  starTxts?: Phaser.GameObjects.Text[];
-  lockTxt?: Phaser.GameObjects.Text;
+const WORLD_HUES: Record<number, number> = { 1: 330, 2: 140, 3: 225, 4: 175, 5: 195, 6: 10 };
+const WORLD_NAMES: Record<number, string> = {
+  1: '🌸 Jelly Hills', 2: '🦕 Dino Valley', 3: '🚀 Cosmo Station',
+  4: '🐠 Coral Reef', 5: '❄️ Ice Castle', 6: '🌋 Volcanic Land'
+};
+
+function intToHex(n: number): string {
+  return '#' + n.toString(16).padStart(6, '0');
 }
 
-export class LevelSelectScene extends Phaser.Scene {
+export class LevelSelectScene implements IGameScene {
+  key = 'LevelSelect';
   private worldIndex = 1;
-  private nodes: LevelNode[] = [];
-  private blockGfx!: Phaser.GameObjects.Graphics;
-  private pathGfx!: Phaser.GameObjects.Graphics;
-  private bgGfx!: Phaser.GameObjects.Graphics;
-  private activeSkin = 'none';
 
-  constructor() { super({ key: 'LevelSelect' }); }
-
-  init(data: { world?: number }) {
-    this.worldIndex = data.world ?? GameData.world.get();
-    this.activeSkin = GameData.activeSkin.get();
+  init(data: any) {
+    this.worldIndex = data?.world ?? GameData.world.get();
   }
 
-  create() {
-    const W = this.scale.width, H = this.scale.height;
+  create(scene: BjsScene) {
+    BabylonBackground.initScene(scene, this.worldIndex);
+    const wHue = WORLD_HUES[this.worldIndex] ?? 330;
 
-    // Background
-    this.bgGfx = this.add.graphics();
-    // Grid lines color based on world index
-    const worldHues: Record<number, number> = { 1: 330, 2: 175, 3: 270, 4: 195, 5: 210, 6: 15 };
-    const wHue = worldHues[this.worldIndex] ?? 280;
-    drawCartoonCosmicBg(this.bgGfx, W, H, wHue);
-    createCosmicEffects(this, W, H, wHue);
+    const gui = BabylonGUI.createFullscreenUI('level_select_ui');
 
-    // Graphics layers
-    this.pathGfx = this.add.graphics();
-    this.blockGfx = this.add.graphics();
+    // Warm peach background
+    const bg = new Rectangle();
+    bg.width = '100%'; bg.height = '100%';
+    bg.background = '#fff5ea'; bg.thickness = 0;
+    gui.addControl(bg);
 
     // Title
-    this.add.text(W / 2, H * 0.08, `World ${this.worldIndex} Levels`, {
-      fontFamily: 'Orbitron', fontSize: Math.min(W * 0.07, 36) + 'px', color: '#ffffff',
-      shadow: { offsetX: 0, offsetY: 4, color: '#6600ff', blur: 16, fill: true }
-    }).setOrigin(0.5);
+    const title = new TextBlock();
+    title.text = WORLD_NAMES[this.worldIndex] ?? 'Select Level';
+    title.color = '#ff9f1c';
+    title.fontSize = 32;
+    title.fontStyle = 'bold';
+    title.fontFamily = 'Fredoka, sans-serif';
+    title.shadowColor = '#5c3d2e';
+    title.shadowBlur = 0;
+    title.shadowOffsetX = 3;
+    title.shadowOffsetY = 3;
+    title.top = '-46%';
+    title.verticalAlignment = Control.VERTICAL_ALIGNMENT_CENTER;
+    gui.addControl(title);
 
-    // Retrieve progress
-    const savedLevel = parseInt(localStorage.getItem(`arrow_buddies_w${this.worldIndex}_level`) ?? '1');
+    // Scroll container for levels
+    const scroller = new ScrollViewer('level_scroll');
+    scroller.width = '360px'; scroller.height = '75%';
+    scroller.top = '4%';
+    scroller.verticalAlignment = Control.VERTICAL_ALIGNMENT_CENTER;
+    scroller.thickness = 0;
+    scroller.color = 'transparent';
+    gui.addControl(scroller);
 
-    // Define 5 level positions on a winding S-shaped road
-    const pts = [
-      { x: W * 0.22, y: H * 0.74 },
-      { x: W * 0.46, y: H * 0.62 },
-      { x: W * 0.74, y: H * 0.49 },
-      { x: W * 0.40, y: H * 0.36 },
-      { x: W * 0.68, y: H * 0.22 }
-    ];
+    const panel = new StackPanel();
+    panel.isVertical = true;
+    panel.width = '100%';
+    scroller.addControl(panel);
 
-    // Build level nodes AND create persistent text overlays (created once, repositioned each frame)
-    this.nodes = pts.map((pt, i) => {
-      const levelIdx = i + 1;
-      const unlocked = levelIdx <= savedLevel;
-      const stars = GameData.starsFor(this.worldIndex, levelIdx);
+    const LEVELS = 10;
+    for (let lv = 1; lv <= LEVELS; lv++) {
+      const stars = GameData.starsFor(this.worldIndex, lv);
+      const unlocked = lv === 1 || GameData.starsFor(this.worldIndex, lv - 1) > 0;
 
-      const node: LevelNode = {
-        levelIdx,
-        x: pt.x, y: pt.y, cy: pt.y,
-        unlocked, stars,
-        state: 'idle', animT: 0,
-        scalePara: 1, scalePerp: 1, angle: 0, bumpDy: 0
-      };
+      const col = intToHex(hslToInt(wHue, unlocked ? 80 : 15, unlocked ? 40 : 20));
+      const borderCol = intToHex(hslToInt(wHue, unlocked ? 90 : 20, unlocked ? 22 : 12));
+
+      const row = new Rectangle();
+      row.width = '340px'; row.height = '68px';
+      row.background = unlocked ? col : '#f0e6d6';
+      row.color = borderCol;
+      row.cornerRadius = 20; row.thickness = 3;
+      row.paddingBottom = '10px';
+      row.shadowColor = borderCol;
+      row.shadowBlur = 0;
+      row.shadowOffsetX = 0;
+      row.shadowOffsetY = 4;
+      row.alpha = 0;
+      panel.addControl(row);
+
+      TweenManager.add({ targets: row, alpha: 1, duration: 350, delay: 150 + lv * 50 });
+
+      const rowTxt = new TextBlock();
+      rowTxt.text = unlocked
+        ? `Level ${lv}   ${'⭐'.repeat(stars)}${'☆'.repeat(Math.max(0, 3 - stars))}`
+        : `🔒  Level ${lv}  (Locked)`;
+      rowTxt.color = unlocked ? '#ffffff' : '#9999aa';
+      rowTxt.fontSize = 18;
+      rowTxt.fontStyle = 'bold';
+      rowTxt.fontFamily = 'Fredoka, sans-serif';
+      row.addControl(rowTxt);
 
       if (unlocked) {
-        // Level number badge — no shadow, clean neon text
-        node.numTxt = this.add.text(pt.x, pt.y, `${levelIdx}`, {
-          fontFamily: 'Orbitron',
-          fontSize: '18px',
-          fontStyle: 'bold',
-          color: '#ffffff',
-          stroke: '#000000',
-          strokeThickness: 3
-        }).setOrigin(0.5).setDepth(22);
-
-        // Star row — created once, repositioned
-        node.starTxts = [];
-        for (let st = 0; st < 3; st++) {
-          const starChar = stars > st ? '⭐' : '○';
-          const starCol  = stars > st ? '#ffe45e' : '#554466';
-          const stTxt = this.add.text(pt.x + (st - 1) * 22, pt.y, starChar, {
-            fontFamily: 'Orbitron', fontSize: '13px', color: starCol
-          }).setOrigin(0.5).setDepth(21);
-          node.starTxts.push(stTxt);
-        }
-      } else {
-        // Lock icon — created once
-        node.lockTxt = this.add.text(pt.x, pt.y, '🔒', {
-          fontFamily: 'Orbitron', fontSize: '16px'
-        }).setOrigin(0.5).setDepth(22);
-      }
-
-      return node;
-    });
-
-    // Create interactive click zones for level nodes
-    this.nodes.forEach(node => {
-      if (!node.unlocked) return;
-      // Zone around cube center
-      const zone = this.add.zone(node.x, node.y, 90, 90).setInteractive({ useHandCursor: true });
-      zone.on('pointerdown', () => {
-        this.triggerNodeClick(node);
-      });
-    });
-
-    // Back Button
-    createCartoonButton(this, 75, 38, 120, 42, '◀ Worlds', () => {
-      audio.playTap();
-      this.cameras.main.fadeOut(300, 10, 0, 26);
-      this.time.delayedCall(320, () => this.scene.start('WorldSelect'));
-    }, { bgColor: 0x9b72ff, fontSize: 16 });
-
-    // Fade in
-    this.cameras.main.fadeIn(400, 10, 0, 26);
-  }
-
-  private triggerNodeClick(node: LevelNode) {
-    if (node.state !== 'idle') return;
-    audio.playTap();
-    node.state = 'launch';
-    node.animT = 0;
-
-    if (typeof navigator !== 'undefined' && navigator.vibrate) {
-      try { navigator.vibrate([40, 50]); } catch {}
-    }
-
-    this.time.delayedCall(160, () => {
-      audio.playLaunch();
-    });
-
-    this.time.delayedCall(220, () => {
-      this.cameras.main.fadeOut(350, 10, 0, 26);
-    });
-
-    this.time.delayedCall(580, () => {
-      GameData.level.set(node.levelIdx);
-      this.scene.start('Game', { world: this.worldIndex, level: node.levelIdx });
-    });
-  }
-
-  update(_time: number, delta: number) {
-    const dt = Math.min(delta / 1000, 0.1);
-
-    // 1. Draw Winding Path
-    this.drawPath();
-
-    // 2. Clear graphics layer
-    const g = this.blockGfx;
-    g.clear();
-
-    const worldColors: Record<number, number> = { 1: 330, 2: 140, 3: 225 };
-    const wHue = worldColors[this.worldIndex] ?? 330;
-
-    // 3. Render level nodes
-    this.nodes.forEach((node, i) => {
-      node.animT += dt;
-
-      // Vertical hover oscillation for unlocked levels
-      let hover = 0;
-      if (node.unlocked && node.state !== 'launch') {
-        hover = Math.sin(this.time.now * 0.0025 + i * 1.6) * 5.5;
-      }
-      node.cy = node.y + hover;
-
-      // Update state animations
-      if (node.state === 'idle') {
-        node.scalePara = 1;
-        node.scalePerp = 1;
-        node.angle = 0;
-
-        // Mouse hover scaling react
-        const pointer = this.input.activePointer;
-        const dist = Math.hypot(pointer.x - node.x, pointer.y - node.cy);
-        if (node.unlocked && dist < 55) {
-          const squeeze = 1.0 - (1.0 - dist / 55) * 0.12;
-          node.scalePara = squeeze;
-          node.scalePerp = 2.0 - squeeze;
-          node.angle = Math.PI / 2; // vertical hover squash
-        }
-      } else if (node.state === 'wiggle') {
-        const dur = 0.60;
-        const scaleAmp = Math.sin(node.animT * Math.PI * 6) * Math.exp(-node.animT * 4.5);
-        node.scalePara = 1.0 - 0.40 * scaleAmp;
-        node.scalePerp = 1.0 + 0.30 * scaleAmp;
-        node.cy = node.y + node.bumpDy * scaleAmp;
-        if (node.animT >= dur) {
-          node.state = 'idle';
-          node.animT = 0;
-        }
-      } else if (node.state === 'launch') {
-        if (node.animT < 0.15) {
-          // Wind-up squeeze
-          node.scalePara = 0.62;
-          node.scalePerp = 1.38;
-          node.cy = node.y + 14;
-          node.angle = Math.PI / 2;
-        } else {
-          // Stretch and shoot up!
-          const flyT = node.animT - 0.15;
-          node.scalePara = 1.48;
-          node.scalePerp = 0.65;
-          node.cy = node.y + 14 - flyT * flyT * 1900 - flyT * 400;
-          node.angle = Math.PI / 2;
-        }
-      }
-
-      // Draw the node
-      const cx = node.x, cy = node.cy;
-      const s = 1.15; // standard level selector cube scale
-      const tw = TILE_W * s, th = TILE_H * s, bh = BLOCK_H * s;
-
-      const topCol   = node.unlocked ? hslToInt(wHue, 92, 70) : 0x2e243a;
-      const leftCol  = node.unlocked ? hslToInt(wHue, 82, 50) : 0x221a2c;
-      const rightCol = node.unlocked ? hslToInt(wHue, 85, 33) : 0x16101e;
-      const glowCol  = node.unlocked ? hslToInt(wHue, 100, 80) : 0x3d304e;
-
-      const scalePara = node.scalePara;
-      const scalePerp = node.scalePerp;
-      const angle = node.angle;
-      const cos = Math.cos(angle);
-      const sin = Math.sin(angle);
-
-      const transformer = (px: number, py: number) => {
-        const dx = px - cx;
-        const dy = py - (cy + bh / 2);
-        const rx = dx * cos + dy * sin;
-        const ry = -dx * sin + dy * cos;
-        const rxScaled = rx * scalePara;
-        const ryScaled = ry * scalePerp;
-        const dxPrime = rxScaled * cos - ryScaled * sin;
-        const dyPrime = rxScaled * sin + ryScaled * cos;
-        return { x: cx + dxPrime, y: (cy + bh / 2) + dyPrime };
-      };
-
-      const tPt = (px: number, py: number) => transformer(px, py);
-
-      // Render block
-      drawIsoCube(g, cx, cy, topCol, leftCol, rightCol, glowCol, node.unlocked ? 0.65 : 0.25, transformer, this.worldIndex, this.time.now);
-
-      // ── Overlay: reposition pre-created text objects ───────────────
-      if (node.unlocked) {
-        const topCenter = tPt(cx, cy - th * 0.55);
-        const isFlyHide = node.state === 'launch' && node.animT > 0.15;
-        const overlayAlpha = isFlyHide ? 0 : 1;
-
-        // Draw glowing badge disc on the top face
-        if (!isFlyHide) {
-          const badgeR = 13 * Math.min(scalePara, scalePerp);
-          const badgeCol = hslToInt(wHue, 100, 45);
-          g.fillStyle(badgeCol, 0.9);
-          g.fillCircle(topCenter.x, topCenter.y, badgeR);
-          g.lineStyle(2, 0xffffff, 0.75);
-          g.strokeCircle(topCenter.x, topCenter.y, badgeR);
-        }
-
-        if (node.numTxt) {
-          node.numTxt.setPosition(topCenter.x, topCenter.y).setAlpha(overlayAlpha);
-        }
-
-        const starY = cy + bh + 18;
-        node.starTxts?.forEach((stTxt, st) => {
-          stTxt.setPosition(cx + (st - 1) * 22, starY).setAlpha(overlayAlpha);
+        row.onPointerEnterObservable.add(() => { row.scaleX = 1.03; row.scaleY = 1.03; row.shadowOffsetY = 5; });
+        row.onPointerOutObservable.add(() => { row.scaleX = 1.0; row.scaleY = 1.0; row.shadowOffsetY = 4; });
+        row.onPointerClickObservable.add(() => {
+          audio.playTap();
+          GameData.level.set(lv);
+          SceneManager.start('Game', { world: this.worldIndex, level: lv });
         });
-      } else {
-        const topCenter = tPt(cx, cy - th * 0.55);
-        if (node.lockTxt) {
-          node.lockTxt.setPosition(topCenter.x, topCenter.y);
-        }
       }
+    }
 
-      // Draw active skin hat if unlocked
-      if (node.unlocked && node.state !== 'launch') {
-        drawHat(g, cx, cy, tw, th, this.activeSkin, this.time.now, transformer);
-      }
+    // Back button (pink cartoon design)
+    const backBtn = Button.CreateSimpleButton('btn_back', '← Worlds');
+    backBtn.width = '160px'; backBtn.height = '44px';
+    backBtn.color = '#ffffff'; backBtn.fontSize = 20;
+    backBtn.fontStyle = 'bold';
+    backBtn.fontFamily = 'Fredoka, sans-serif';
+    backBtn.background = '#e91e63';
+    (backBtn as any).color = '#c2185b'; // border color
+    backBtn.cornerRadius = 20; backBtn.thickness = 3;
+    backBtn.shadowColor = '#c2185b';
+    backBtn.shadowBlur = 0;
+    backBtn.shadowOffsetX = 0;
+    backBtn.shadowOffsetY = 4;
+    backBtn.top = '46%';
+    backBtn.verticalAlignment = Control.VERTICAL_ALIGNMENT_CENTER;
+    backBtn.alpha = 0;
+    gui.addControl(backBtn);
+    TweenManager.add({ targets: backBtn, alpha: 1, duration: 400, delay: 700 });
+    backBtn.onPointerUpObservable.add(() => {
+      audio.playTap();
+      SceneManager.start('WorldSelect');
     });
-  }
-
-  private drawPath() {
-    const g = this.pathGfx;
-    g.clear();
-
-    const worldColors: Record<number, number> = { 1: 0xff6eb4, 2: 0x6bcb77, 3: 0x74c0fc };
-    const col = worldColors[this.worldIndex] ?? 0x9b72ff;
-
-    // Glow passes
-    for (let pass = 0; pass < 3; pass++) {
-      g.lineStyle([6, 3.5, 1.5][pass], col, [0.15, 0.35, 0.75][pass]);
-      g.beginPath();
-      g.moveTo(this.nodes[0].x, this.nodes[0].cy + BLOCK_H * 0.5);
-      for (let i = 1; i < this.nodes.length; i++) {
-        g.lineTo(this.nodes[i].x, this.nodes[i].cy + BLOCK_H * 0.5);
-      }
-      g.strokePath();
-    }
-
-    // Inner bright neon line
-    g.lineStyle(1.5, 0xffffff, 0.85);
-    g.beginPath();
-    g.moveTo(this.nodes[0].x, this.nodes[0].cy + BLOCK_H * 0.5);
-    for (let i = 1; i < this.nodes.length; i++) {
-      g.lineTo(this.nodes[i].x, this.nodes[i].cy + BLOCK_H * 0.5);
-    }
-    g.strokePath();
   }
 }

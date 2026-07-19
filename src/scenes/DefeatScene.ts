@@ -1,206 +1,146 @@
-/* DefeatScene.ts — Game Over screen offering Ad Continuation or Restart */
-import Phaser from 'phaser';
+/* DefeatScene.ts — Babylon.js Game Over screen */
+import type { IGameScene } from '../babylon/SceneManager';
+import { BabylonGUI } from '../babylon/BabylonGUI';
+import { SceneManager } from '../babylon/SceneManager';
+import { TweenManager } from '../babylon/TweenManager';
+import { BabylonBackground } from '../babylon/BabylonBackground';
 import { GameData } from '../utils/GameData';
-import { hslToInt, getBlockPalette, TILE_W, TILE_H, BLOCK_H, drawHat, createCartoonButton } from '../utils/IsoHelper';
 import { audio } from '../audio';
 import { AdManager } from '../utils/AdManager';
+import { Control, TextBlock, Rectangle, Button } from '@babylonjs/gui';
+import type { Scene as BjsScene } from '@babylonjs/core';
 
-export class DefeatScene extends Phaser.Scene {
-  constructor() { super({ key: 'Defeat' }); }
+export class DefeatScene implements IGameScene {
+  key = 'Defeat';
 
-  create(data: { world: number; level: number; isDaily?: boolean }) {
-    const { world, level, isDaily } = data;
-    const W = this.scale.width, H = this.scale.height;
+  create(_scene: BjsScene, data: { world: number; level: number; isDaily?: boolean }) {
+    const { world, level, isDaily } = data ?? {};
 
-    this.cameras.main.setBackgroundColor('#1a000a'); // Dark red background
-    this.cameras.main.fadeIn(400, 10, 0, 26);
+    BabylonBackground.initScene(_scene, world ?? 1);
 
-    // Background glow burst (red/dark)
-    const bg = this.add.graphics();
-    this.drawDefeatBg(bg, W, H);
+    const gui = BabylonGUI.createFullscreenUI('defeat_ui');
 
-    // Animated isometric sad block
-    this.createSadBlock(W / 2, H * 0.28, world);
+    // Warm peach background overlay
+    const bg = new Rectangle();
+    bg.width = '100%'; bg.height = '100%';
+    bg.background = '#fff5ea'; bg.thickness = 0; bg.alpha = 0.45;
+    gui.addControl(bg);
 
-    // DEFEAT heading
-    const clearTxt = this.add.text(W / 2, H * 0.42, 'OUT OF MOVES!', {
-      fontFamily: 'Orbitron',
-      fontSize: Math.min(W * 0.1, 52) + 'px',
-      color: '#ff4d4d',
-      stroke: '#4a0000', strokeThickness: 6,
-      shadow: { offsetX: 0, offsetY: 6, color: '#000000', blur: 12, fill: true }
-    }).setOrigin(0.5).setAlpha(0).setScale(0.3);
+    // OUT OF MOVES heading
+    const heading = new TextBlock();
+    heading.text = 'OUT OF MOVES!';
+    heading.color = '#ff6b6b';
+    heading.fontSize = 52;
+    heading.fontStyle = 'bold';
+    heading.fontFamily = 'Fredoka, sans-serif';
+    heading.shadowColor = '#5c3d2e';
+    heading.shadowBlur = 0;
+    heading.shadowOffsetX = 3;
+    heading.shadowOffsetY = 3;
+    heading.top = '-25%';
+    heading.verticalAlignment = Control.VERTICAL_ALIGNMENT_CENTER;
+    heading.scaleX = 0.3; heading.scaleY = 0.3; heading.alpha = 0;
+    gui.addControl(heading);
+    TweenManager.add({ targets: heading, alpha: 1, scaleX: 1, scaleY: 1, duration: 600, ease: 'Back.Out', delay: 200 });
 
-    this.tweens.add({
-      targets: clearTxt, alpha: 1, scaleX: 1, scaleY: 1,
-      duration: 600, ease: 'Back.Out', delay: 200
-    });
+    // Subtitle
+    const sub = new TextBlock();
+    sub.text = 'Don\'t give up! Try again or watch an ad.';
+    sub.color = '#7f8c8d';
+    sub.fontSize = 18;
+    sub.fontStyle = 'bold';
+    sub.fontFamily = 'Fredoka, sans-serif';
+    sub.top = '-15%';
+    sub.verticalAlignment = Control.VERTICAL_ALIGNMENT_CENTER;
+    sub.alpha = 0;
+    gui.addControl(sub);
+    TweenManager.add({ targets: sub, alpha: 1, duration: 400, delay: 500 });
 
-    // Buttons
-    this.createButtons(W / 2, H * 0.65, world, level, isDaily);
-  }
-
-  private drawDefeatBg(g: Phaser.GameObjects.Graphics, W: number, H: number) {
-    const steps = 12;
-    for (let i = steps; i >= 0; i--) {
-      const t = i / steps;
-      // Dark red to black gradient
-      const col = hslToInt(0, 80, 5 + t * 15);
-      const size = (1 - t) * Math.max(W, H) * 1.5;
-      g.fillStyle(col, 0.1 + t * 0.1);
-      g.fillCircle(W / 2, H / 2, size);
-    }
-  }
-
-  private createSadBlock(cx: number, cy: number, world: number) {
-    const g = this.add.graphics();
-    const pal = getBlockPalette(world, 0); // using first block color
-
-    // Wiggle tween
-    const bObj = { y: cy - 200, scalePara: 1, scalePerp: 1 };
-
-    this.tweens.add({
-      targets: bObj, y: cy,
-      duration: 800, ease: 'Bounce.easeOut',
-      onUpdate: () => {
-        g.clear();
-        this.drawSadIsoCube(g, cx, bObj.y, pal, bObj.scalePara, bObj.scalePerp);
-      }
-    });
-
-    this.time.delayedCall(800, () => {
-      this.tweens.add({
-        targets: bObj,
-        scalePara: 1.05, scalePerp: 0.95,
-        duration: 2000, yoyo: true, repeat: -1, ease: 'Sine.InOut',
-        onUpdate: () => {
-          g.clear();
-          this.drawSadIsoCube(g, cx, bObj.y, pal, bObj.scalePara, bObj.scalePerp);
-        }
-      });
-    });
-  }
-
-  private drawSadIsoCube(
-    g: Phaser.GameObjects.Graphics,
-    cx: number, cy: number,
-    pal: { top: number, left: number, right: number, glow: number },
-    scalePara: number, scalePerp: number
-  ) {
-    const tw = TILE_W * 0.5 * 2.5;
-    const th = TILE_H * 0.5 * 2.5;
-    const bh = BLOCK_H * 2.5;
-
-    const cos = 0.866, sin = 0.5;
-    const tPt = (x: number, y: number) => {
-      const dx = x - cx, dy = y - cy;
-      const nx = dx * cos - dy * sin;
-      const ny = dx * sin + dy * cos;
-      return { x: cx + nx * scalePara, y: cy + ny * scalePerp };
-    };
-
-    const s = 1.0;
-    const topX = cx, topY = cy - th * s;
-    const rightX = cx + tw * s, rightY = cy;
-    const botX = cx, botY = cy + th * s;
-    const leftX = cx - tw * s, leftY = cy;
-    const bbX = botX, bbY = botY + bh * s;
-    const lbX = leftX, lbY = leftY + bh * s;
-    const rbX = rightX, rbY = rightY + bh * s;
-
-    // Dim colors for sadness
-    const dim = (c: number) => {
-      const r = ((c >> 16) & 0xff) * 0.6;
-      const gr = ((c >> 8) & 0xff) * 0.6;
-      const b = (c & 0xff) * 0.6;
-      return (r << 16) | (gr << 8) | b;
-    };
-
-    g.fillStyle(dim(pal.right), 1);
-    g.fillPath(); g.beginPath();
-    g.moveTo(rightX, rightY); g.lineTo(botX, botY); g.lineTo(bbX, bbY); g.lineTo(rbX, rbY);
-    g.fillPath();
-
-    g.fillStyle(dim(pal.left), 1);
-    g.fillPath(); g.beginPath();
-    g.moveTo(leftX, leftY); g.lineTo(botX, botY); g.lineTo(bbX, bbY); g.lineTo(lbX, lbY);
-    g.fillPath();
-
-    g.fillStyle(dim(pal.top), 1);
-    g.fillPath(); g.beginPath();
-    g.moveTo(topX, topY); g.lineTo(rightX, rightY); g.lineTo(botX, botY); g.lineTo(leftX, leftY);
-    g.fillPath();
-
-    // Sad face (X eyes or drooping eyes)
-    g.fillStyle(0x111111, 1);
-    const ex = cx; const ey = cy - th * 0.1;
-    // Left eye
-    const le = tPt(ex - 22, ey);
-    g.fillEllipse(le.x, le.y, 10, 4);
-    // Right eye
-    const re = tPt(ex + 22, ey);
-    g.fillEllipse(re.x, re.y, 10, 4);
-
-    // Drooping mouth
-    g.lineStyle(4, 0x111111, 1);
-    g.beginPath();
-    const mx = ex, my = ey + 25;
-    g.moveTo(tPt(mx - 10, my + 8).x, tPt(mx - 10, my + 8).y);
-    g.lineTo(tPt(mx, my).x, tPt(mx, my).y);
-    g.lineTo(tPt(mx + 10, my + 8).x, tPt(mx + 10, my + 8).y);
-    g.strokePath();
-    
-    // Skin hat
-    const activeSkin = GameData.activeSkin.get();
-    drawHat(g, cx, cy, tw, th, activeSkin, this.time.now, tPt);
-  }
-
-  private createButtons(cx: number, cy: number, world: number, level: number, isDaily?: boolean) {
-    // 1. WATCH AD FOR +5 MOVES (Primary Action)
-    const adBtnW = 280, adBtnH = 65;
-    const adFontSize = Math.min(Math.round(adBtnH * 0.38), Math.round(adBtnW / Math.max('🎬 Watch Ad for +5 Moves'.length * 0.5, 1)), 20);
-    const adBtn = createCartoonButton(this, cx, cy, adBtnW, adBtnH, '🎬 Watch Ad for +5 Moves', async () => {
+    // Watch Ad button (yellow cartoon button)
+    const adBtn = Button.CreateSimpleButton('btn_ad', '🎬 Watch Ad for +5 Moves');
+    adBtn.width = '300px'; adBtn.height = '65px';
+    adBtn.color = '#ffffff'; adBtn.fontSize = 17;
+    adBtn.fontStyle = 'bold';
+    adBtn.fontFamily = 'Fredoka, sans-serif';
+    adBtn.background = '#f1c40f';
+    (adBtn as any).color = '#f39c12'; // border color
+    adBtn.cornerRadius = 20; adBtn.thickness = 3;
+    adBtn.shadowColor = '#f39c12';
+    adBtn.shadowBlur = 0;
+    adBtn.shadowOffsetX = 0;
+    adBtn.shadowOffsetY = 4;
+    adBtn.top = '3%';
+    adBtn.verticalAlignment = Control.VERTICAL_ALIGNMENT_CENTER;
+    adBtn.alpha = 0;
+    gui.addControl(adBtn);
+    TweenManager.add({ targets: adBtn, alpha: 1, duration: 500, delay: 600 });
+    adBtn.onPointerEnterObservable.add(() => { adBtn.scaleX = 1.03; adBtn.scaleY = 1.03; adBtn.shadowOffsetY = 5; });
+    adBtn.onPointerOutObservable.add(() => { adBtn.scaleX = 1.0; adBtn.scaleY = 1.0; adBtn.shadowOffsetY = 4; });
+    adBtn.onPointerDownObservable.add(() => { adBtn.scaleX = 0.97; adBtn.scaleY = 0.97; adBtn.shadowOffsetY = 1; });
+    adBtn.onPointerUpObservable.add(async () => {
+      adBtn.scaleX = 1.0; adBtn.scaleY = 1.0;
+      adBtn.shadowOffsetY = 4;
       audio.playTap();
       const success = await AdManager.showRewardedAd('extra_moves' as any);
       if (success) {
-        this.cameras.main.fadeOut(300, 10, 0, 26);
-        this.time.delayedCall(320, () => {
-          this.scene.resume('Game', { bonusMoves: 5 });
-          this.scene.stop();
-        });
+        SceneManager.start('Game', { world, level, isDaily, bonusMoves: 5 });
       }
-    }, { bgColor: 0xffaa00, textColor: '#000000', fontSize: adFontSize });
-    adBtn.setAlpha(0).setScale(0.8);
+    });
 
-    // 2. RESTART (Secondary Action)
-    const restartBtnW = 200, restartBtnH = 55;
-    const restartFontSize = Math.min(Math.round(restartBtnH * 0.38), Math.round(restartBtnW / Math.max('🔄 Restart Level'.length * 0.5, 1)), 20);
-    const restartBtn = createCartoonButton(this, cx, cy + 90, restartBtnW, restartBtnH, '🔄 Restart Level', () => {
+    // Restart button (green cartoon button)
+    const restartBtn = Button.CreateSimpleButton('btn_restart', '🔄 Restart Level');
+    restartBtn.width = '220px'; restartBtn.height = '55px';
+    restartBtn.color = '#ffffff'; restartBtn.fontSize = 18;
+    restartBtn.fontStyle = 'bold';
+    restartBtn.fontFamily = 'Fredoka, sans-serif';
+    restartBtn.background = '#2ecc71';
+    (restartBtn as any).color = '#27ae60'; // border color
+    restartBtn.cornerRadius = 20; restartBtn.thickness = 3;
+    restartBtn.shadowColor = '#27ae60';
+    restartBtn.shadowBlur = 0;
+    restartBtn.shadowOffsetX = 0;
+    restartBtn.shadowOffsetY = 4;
+    restartBtn.top = '16%';
+    restartBtn.verticalAlignment = Control.VERTICAL_ALIGNMENT_CENTER;
+    restartBtn.alpha = 0;
+    gui.addControl(restartBtn);
+    TweenManager.add({ targets: restartBtn, alpha: 1, duration: 500, delay: 750 });
+    restartBtn.onPointerEnterObservable.add(() => { restartBtn.scaleX = 1.03; restartBtn.scaleY = 1.03; restartBtn.shadowOffsetY = 5; });
+    restartBtn.onPointerOutObservable.add(() => { restartBtn.scaleX = 1.0; restartBtn.scaleY = 1.0; restartBtn.shadowOffsetY = 4; });
+    restartBtn.onPointerDownObservable.add(() => { restartBtn.scaleX = 0.97; restartBtn.scaleY = 0.97; restartBtn.shadowOffsetY = 1; });
+    restartBtn.onPointerUpObservable.add(() => {
+      restartBtn.scaleX = 1.0; restartBtn.scaleY = 1.0;
+      restartBtn.shadowOffsetY = 4;
       audio.playTap();
-      this.cameras.main.fadeOut(300, 10, 0, 26);
-      this.time.delayedCall(320, () => {
-        this.scene.stop();
-        this.scene.start('Game', { world, level, isDaily });
-      });
-    }, { bgColor: 0x50fa7b, fontSize: restartFontSize });
-    restartBtn.setAlpha(0).setScale(0.8);
+      SceneManager.start('Game', { world, level, isDaily });
+    });
 
-    // 3. QUIT (Tertiary)
-    const quitBtnW = 180, quitBtnH = 48;
-    const quitBtn = createCartoonButton(this, cx, cy + 165, quitBtnW, quitBtnH, '🏠 Main Menu', () => {
+    // Quit button (pink cartoon button)
+    const quitBtn = Button.CreateSimpleButton('btn_quit', '🏠 Main Menu');
+    quitBtn.width = '190px'; quitBtn.height = '48px';
+    quitBtn.color = '#ffffff'; quitBtn.fontSize = 16;
+    quitBtn.fontStyle = 'bold';
+    quitBtn.fontFamily = 'Fredoka, sans-serif';
+    quitBtn.background = '#e91e63';
+    (quitBtn as any).color = '#c2185b'; // border color
+    quitBtn.cornerRadius = 20; quitBtn.thickness = 3;
+    quitBtn.shadowColor = '#c2185b';
+    quitBtn.shadowBlur = 0;
+    quitBtn.shadowOffsetX = 0;
+    quitBtn.shadowOffsetY = 4;
+    quitBtn.top = '27%';
+    quitBtn.verticalAlignment = Control.VERTICAL_ALIGNMENT_CENTER;
+    quitBtn.alpha = 0;
+    gui.addControl(quitBtn);
+    TweenManager.add({ targets: quitBtn, alpha: 1, duration: 500, delay: 900 });
+    quitBtn.onPointerEnterObservable.add(() => { quitBtn.scaleX = 1.03; quitBtn.scaleY = 1.03; quitBtn.shadowOffsetY = 5; });
+    quitBtn.onPointerOutObservable.add(() => { quitBtn.scaleX = 1.0; quitBtn.scaleY = 1.0; quitBtn.shadowOffsetY = 4; });
+    quitBtn.onPointerDownObservable.add(() => { quitBtn.scaleX = 0.97; quitBtn.scaleY = 0.97; quitBtn.shadowOffsetY = 1; });
+    quitBtn.onPointerUpObservable.add(() => {
+      quitBtn.scaleX = 1.0; quitBtn.scaleY = 1.0;
+      quitBtn.shadowOffsetY = 4;
       audio.playTap();
-      this.cameras.main.fadeOut(300, 10, 0, 26);
-      this.time.delayedCall(320, () => {
-        this.scene.start('Menu');
-      });
-    }, { bgColor: 0xff5555, fontSize: 16 });
-    quitBtn.setAlpha(0).setScale(0.8);
-
-    // Animate all in
-    this.tweens.add({
-      targets: [adBtn, restartBtn, quitBtn],
-      alpha: 1, scale: 1,
-      duration: 500, delay: 600, stagger: 150, ease: 'Back.Out'
+      SceneManager.start('Menu');
     });
   }
 }

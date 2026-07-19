@@ -1,587 +1,360 @@
-/* MenuScene.ts — Animated splash screen with floating isometric buddy blocks */
-import Phaser from 'phaser';
-import { TILE_W, TILE_H, BLOCK_H, getBlockPalette, drawHat, drawIsoCube, drawCartoonCosmicBg, createCosmicEffects, blendColor } from '../utils/IsoHelper';
+/* MenuScene.ts — Clean bold main menu */
+import type { IGameScene } from '../babylon/SceneManager';
+import { BabylonGUI } from '../babylon/BabylonGUI';
+import { SceneManager } from '../babylon/SceneManager';
+import { TweenManager } from '../babylon/TweenManager';
+import { BabylonBlockScene } from '../babylon/BabylonBlockScene';
+import { BabylonParticles } from '../babylon/BabylonParticles';
 import { GameData } from '../utils/GameData';
 import { audio } from '../audio';
+import { Control, Rectangle, TextBlock, StackPanel, Button } from '@babylonjs/gui';
+import type { Scene as BjsScene } from '@babylonjs/core';
 
-export class MenuScene extends Phaser.Scene {
-  private blockGfx!: Phaser.GameObjects.Graphics;
-  private bgGfx!: Phaser.GameObjects.Graphics;
-  private floatingBlocks: Array<{
-    x: number; y: number; vy: number; phase: number; speed: number;
-    worldIdx: number; posHash: number; scale: number; alpha: number;
-    skin: string;
-  }> = [];
+function makeBtn(
+  id: string,
+  emoji: string,
+  label: string,
+  bg: string,
+  borderColor: string,
+  onClick: () => void
+): Button {
+  const btn = Button.CreateSimpleButton(id, `${emoji}  ${label}`);
+  btn.width        = '380px';
+  btn.height       = '80px';
+  btn.fontSize     = 26;
+  btn.fontStyle    = 'bold';
+  btn.fontFamily   = 'Fredoka, sans-serif';
+  btn.color        = '#ffffff';
+  btn.background   = bg;
+  btn.cornerRadius = 24;
+  btn.thickness    = 3;
+  btn.paddingBottom = '16px';
+  btn.shadowColor  = borderColor;
+  btn.shadowBlur   = 0;
+  btn.shadowOffsetX = 0;
+  btn.shadowOffsetY = 6;
+  (btn as any).color = borderColor;  // border colour
+  if (btn.textBlock) btn.textBlock.color = '#ffffff';
 
-  // Giant Jelly Buddy fields
-  private buddyX = 0;
-  private buddyY = 0;
-  private buddyBaseY = 0;
-  private buddyState: 'idle' | 'wiggle' | 'launch' = 'idle';
-  private buddyAnimT = 0;
-  private buddyScalePara = 1;
-  private buddyScalePerp = 1;
-  private buddyAngle = 0;
-  private buddyBumpDy = 0;
-  private buddySkin = 'none';
-  private isBlinking = false;
-  private blinkTimer = 2.0;
+  btn.onPointerEnterObservable.add(() => {
+    btn.scaleX = 1.04; btn.scaleY = 1.04;
+    btn.shadowOffsetY = 8;
+  });
+  btn.onPointerOutObservable.add(() => {
+    btn.scaleX = 1.0; btn.scaleY = 1.0;
+    btn.shadowOffsetY = 6;
+  });
+  btn.onPointerDownObservable.add(() => {
+    btn.scaleX = 0.96; btn.scaleY = 0.96;
+    btn.shadowOffsetY = 2;
+  });
+  btn.onPointerUpObservable.add(() => {
+    btn.scaleX = 1.0; btn.scaleY = 1.0;
+    btn.shadowOffsetY = 6;
+    audio.playTap();
+    onClick();
+  });
 
-  constructor() { super({ key: 'Menu' }); }
+  return btn;
+}
 
-  create() {
-    const W = this.scale.width, H = this.scale.height;
+export class MenuScene implements IGameScene {
+  key = 'Menu';
+  private updateFn?: (dt: number, t: number) => void;
 
-    // --- Background gradient via graphics ---
-    this.bgGfx = this.add.graphics();
-    drawCartoonCosmicBg(this.bgGfx, W, H, 280);
+  create(scene: BjsScene) {
+    // ── 3D Background ─────────────────────────────────────────────────────
+    const footprint = [
+      { x: -1, z: -1 }, { x: 0, z: -1 }, { x: 1, z: -1 },
+      { x: -1, z:  0 }, { x: 0, z:  0 }, { x: 1, z:  0 },
+      { x: -1, z:  1 }, { x: 0, z:  1 }, { x: 1, z:  1 }
+    ];
+    BabylonBlockScene.create(scene, footprint, 1);
 
-    // --- Animated star field ---
-    createCosmicEffects(this, W, H, 280);
+    const buddies = footprint.map((f, i) => ({
+      id: `m_${i}`, x: f.x, y: 0, z: f.z,
+      type: i === 4 ? 'key' : (i === 8 ? 'bomb' : 'normal'),
+      state: 'idle', sx: 0, sy: 0, dir: { x: 0, y: 0, z: 0 },
+      jellyScalePara: 1, jellyScalePerp: 1, jellyAngle: 0
+    }));
+    BabylonBlockScene.syncBlocks(buddies, 0, 1.5, 0, 0, 1080, 1920);
 
-    // --- Floating isometric demo blocks ---
-    this.blockGfx = this.add.graphics();
-    this.spawnFloatingBlocks(W, H);
+    BabylonParticles.createWeather(scene, 1);
 
-    // --- Initialize Giant Jelly Buddy ---
-    const skins = ['none', 'wizard', 'crown', 'cat', 'tophat', 'chef', 'propeller', 'rainbow'];
-    this.buddySkin = skins[Math.floor(Math.random() * skins.length)];
-    this.buddyX = W / 2;
-    this.buddyY = this.buddyBaseY = H * 0.62;
-    this.buddyState = 'idle';
-    this.buddyAnimT = 0;
+    // Slow cinematic auto-orbit
+    let rotAngle = 0;
+    this.updateFn = (dt: number) => {
+      rotAngle += dt * 0.06;
+      BabylonBlockScene.syncBlocks(
+        buddies, 0, 1.5,
+        Math.sin(rotAngle) * 25, -15,
+        1080, 1920
+      );
+    };
+    SceneManager.addUpdateListener(this.updateFn);
 
-    // Interactive zone for giant buddy
-    const buddyZone = this.add.zone(W / 2, H * 0.62, 140, 140)
-      .setInteractive({ useHandCursor: true });
-    buddyZone.on('pointerdown', () => {
-      this.triggerBuddyWiggle();
+    // ── GUI ───────────────────────────────────────────────────────────────
+    const gui = BabylonGUI.createFullscreenUI('menu_ui');
+
+    // Light warm overlay to make UI pop over 3D, keeping it bright and sunny
+    const overlay = new Rectangle('overlay');
+    overlay.width      = '100%';
+    overlay.height     = '100%';
+    overlay.background = '#fff5ea';
+    overlay.thickness  = 0;
+    overlay.alpha      = 0.35;
+    gui.addControl(overlay);
+
+    // ══════════════════════════════════════════════════════════════════════
+    // TOP AREA — Profile + Coin
+    // ══════════════════════════════════════════════════════════════════════
+
+    // Coin badge top-left
+    const coinBadge = new Rectangle('coin_badge');
+    coinBadge.width           = '180px';
+    coinBadge.height          = '54px';
+    coinBadge.background      = '#ffffff';
+    coinBadge.cornerRadius    = 27;
+    coinBadge.thickness       = 3;
+    coinBadge.color           = '#ffa500';
+    coinBadge.shadowColor     = '#ffa500';
+    coinBadge.shadowBlur      = 0;
+    coinBadge.shadowOffsetX   = 0;
+    coinBadge.shadowOffsetY   = 4;
+    coinBadge.horizontalAlignment = Control.HORIZONTAL_ALIGNMENT_LEFT;
+    coinBadge.verticalAlignment   = Control.VERTICAL_ALIGNMENT_TOP;
+    coinBadge.left = '20px';
+    coinBadge.top  = '20px';
+    coinBadge.alpha = 0;
+    gui.addControl(coinBadge);
+
+    const coinTxt = new TextBlock('coin_txt');
+    coinTxt.text       = `🪙  ${GameData.coins.get()}`;
+    coinTxt.color      = '#d35400';
+    coinTxt.fontSize   = 24;
+    coinTxt.fontStyle  = 'bold';
+    coinTxt.fontFamily = 'Fredoka, sans-serif';
+    coinBadge.addControl(coinTxt);
+
+    TweenManager.add({ targets: coinBadge, alpha: 1, duration: 400, delay: 200 });
+
+    // Mute toggle top-right
+    const muteBtn = new Rectangle('mute_btn');
+    muteBtn.width           = '54px';
+    muteBtn.height          = '54px';
+    muteBtn.background      = '#ffffff';
+    muteBtn.cornerRadius    = 27;
+    muteBtn.thickness       = 3;
+    muteBtn.color           = '#9b72ff';
+    muteBtn.shadowColor     = '#9b72ff';
+    muteBtn.shadowBlur      = 0;
+    muteBtn.shadowOffsetX   = 0;
+    muteBtn.shadowOffsetY   = 4;
+    muteBtn.horizontalAlignment = Control.HORIZONTAL_ALIGNMENT_RIGHT;
+    muteBtn.verticalAlignment   = Control.VERTICAL_ALIGNMENT_TOP;
+    muteBtn.left  = '-20px';
+    muteBtn.top   = '20px';
+    muteBtn.alpha = 0;
+    gui.addControl(muteBtn);
+
+    const muteTxt = new TextBlock('mute_txt');
+    muteTxt.text     = GameData.muted.get() ? '🔇' : '🔊';
+    muteTxt.fontSize = 26;
+    muteBtn.addControl(muteTxt);
+
+    TweenManager.add({ targets: muteBtn, alpha: 1, duration: 400, delay: 200 });
+
+    muteBtn.onPointerDownObservable.add(() => {
+      const muted = !GameData.muted.get();
+      GameData.muted.set(muted);
+      muteTxt.text = muted ? '🔇' : '🔊';
+      if (!muted) audio.playBGM();
+      else audio.stopBGM();
     });
 
-    // --- Game Logo Title ---
-    const titleFontSize = Math.min(W * 0.1, 68);
-    const title1 = this.add.text(W / 2, H * 0.145, '🏹 ARROW', {
-      fontFamily: 'Orbitron', fontSize: `${titleFontSize}px`,
-      color: '#ff85c1',
-      stroke: '#ffffff', strokeThickness: 5,
-      shadow: { offsetX: 0, offsetY: 6, color: '#ff0088', blur: 25, fill: true }
-    }).setOrigin(0.5).setAlpha(0);
+    // ══════════════════════════════════════════════════════════════════════
+    // CENTER — Title
+    // ══════════════════════════════════════════════════════════════════════
 
-    const title2 = this.add.text(W / 2, H * 0.225, 'BUDDIES 3D', {
-      fontFamily: 'Orbitron', fontSize: `${titleFontSize * 0.85}px`,
-      color: '#ffe45e',
-      stroke: '#ffffff', strokeThickness: 4,
-      shadow: { offsetX: 0, offsetY: 6, color: '#ffa500', blur: 20, fill: true }
-    }).setOrigin(0.5).setAlpha(0);
+    const titleLine1 = new TextBlock('t1');
+    titleLine1.text       = '🏹  ARROW BUDDIES';
+    titleLine1.color      = '#ff9f1c';
+    titleLine1.fontSize   = 58;
+    titleLine1.fontStyle  = 'bold';
+    titleLine1.fontFamily = 'Fredoka, sans-serif';
+    titleLine1.shadowColor = '#5c3d2e';
+    titleLine1.shadowBlur  = 0;
+    titleLine1.shadowOffsetX = 4;
+    titleLine1.shadowOffsetY = 4;
+    titleLine1.verticalAlignment = Control.VERTICAL_ALIGNMENT_CENTER;
+    titleLine1.top  = '-38%';
+    titleLine1.alpha = 0;
+    gui.addControl(titleLine1);
 
-    const sub = this.add.text(W / 2, H * 0.30, 'Neon Escape Puzzle!', {
-      fontFamily: 'Orbitron', fontSize: Math.min(W * 0.045, 22) + 'px',
-      color: '#9b72ff'
-    }).setOrigin(0.5).setAlpha(0);
+    const titleLine2 = new TextBlock('t2');
+    titleLine2.text       = 'NEON ESCAPE PUZZLE';
+    titleLine2.color      = '#ff6b6b';
+    titleLine2.fontSize   = 22;
+    titleLine2.fontStyle  = 'bold';
+    titleLine2.fontFamily = 'Fredoka, sans-serif';
+    titleLine2.shadowColor = '#5c3d2e';
+    titleLine2.shadowBlur  = 0;
+    titleLine2.shadowOffsetX = 2;
+    titleLine2.shadowOffsetY = 2;
+    titleLine2.verticalAlignment = Control.VERTICAL_ALIGNMENT_CENTER;
+    titleLine2.top  = '-29%';
+    titleLine2.alpha = 0;
+    gui.addControl(titleLine2);
 
-    // --- Entrance Animations ---
-    this.tweens.add({ targets: title1, alpha: 1, y: H * 0.145, duration: 700, ease: 'Back.Out', delay: 200 });
-    this.tweens.add({ targets: title2, alpha: 1, y: H * 0.225, duration: 700, ease: 'Back.Out', delay: 400 });
-    this.tweens.add({ targets: sub, alpha: 1, duration: 600, delay: 700 });
+    // Animated badge "3D"
+    const badge = new Rectangle('badge_3d');
+    badge.width          = '72px';
+    badge.height         = '34px';
+    badge.background     = '#ff6b6b';
+    badge.cornerRadius   = 12;
+    badge.thickness      = 0;
+    badge.shadowColor    = 'transparent';
+    badge.shadowBlur     = 0;
+    badge.horizontalAlignment = Control.HORIZONTAL_ALIGNMENT_RIGHT;
+    badge.verticalAlignment   = Control.VERTICAL_ALIGNMENT_CENTER;
+    badge.left  = '-30px';
+    badge.top   = '-33%';
+    badge.alpha = 0;
+    gui.addControl(badge);
 
-    // Pulsing glow on title
-    this.tweens.add({ targets: title1, scaleX: 1.04, scaleY: 1.04, duration: 1200, yoyo: true, repeat: -1, ease: 'Sine.InOut' });
+    const badgeTxt = new TextBlock('badge_3d_txt');
+    badgeTxt.text       = '3D';
+    badgeTxt.color      = '#ffffff';
+    badgeTxt.fontSize   = 20;
+    badgeTxt.fontStyle  = 'bold';
+    badgeTxt.fontFamily = 'Fredoka, sans-serif';
+    badge.addControl(badgeTxt);
 
-    // --- Profile & Prestige Top Bar ---
-    const topBar = this.add.container(W / 2, Math.max(28, H * 0.055));
-    const topBarBg = this.add.graphics();
-    const topW = Math.min(W - 40, 290), topH = 38;
-    topBarBg.fillStyle(0x2d1854, 0.9);
-    topBarBg.fillRoundedRect(-topW / 2, -topH / 2, topW, topH, 19);
-    topBarBg.lineStyle(2, 0x00ffcc, 0.9);
-    topBarBg.strokeRoundedRect(-topW / 2, -topH / 2, topW, topH, 19);
+    TweenManager.add({ targets: titleLine1, alpha: 1, scaleX: 0.85, scaleY: 0.85, duration: 1 });
+    TweenManager.add({ targets: titleLine1, alpha: 1, scaleX: 1, scaleY: 1, duration: 700, ease: 'Back.Out', delay: 100 });
+    TweenManager.add({ targets: titleLine2, alpha: 1, duration: 500, delay: 400 });
+    TweenManager.add({ targets: badge,      alpha: 1, duration: 400, delay: 550 });
 
-    const userEmo = GameData.avatar.get();
-    const userName = GameData.username.get();
-    const userLvl = GameData.playerXP.getLevel();
-    const topBarTxt = this.add.text(0, 0, `${userEmo} ${userName} • Lvl ${userLvl} ⭐`, {
-      fontFamily: 'Orbitron', fontSize: Math.min(topW * 0.065, 16) + 'px', color: '#00ffcc', fontStyle: 'bold'
-    }).setOrigin(0.5);
+    // Pulse title
+    let pDir = 1;
+    const origUpdateFn = this.updateFn;
+    this.updateFn = (dt: number, t: number) => {
+      origUpdateFn(dt, t);
+      titleLine1.scaleX += pDir * 0.0004;
+      titleLine1.scaleY += pDir * 0.0004;
+      if (titleLine1.scaleX > 1.03 || titleLine1.scaleX < 0.99) pDir *= -1;
+    };
+    SceneManager.removeUpdateListener(origUpdateFn);
+    SceneManager.addUpdateListener(this.updateFn);
 
-    topBar.add([topBarBg, topBarTxt]);
-    topBar.setInteractive(new Phaser.Geom.Rectangle(-topW / 2, -topH / 2, topW, topH), Phaser.Geom.Rectangle.Contains);
-    topBar.input!.cursor = 'pointer';
-    topBar.on('pointerdown', () => {
-      audio.playTap();
-      this.cameras.main.fadeOut(280, 0, 0, 20);
-      this.time.delayedCall(300, () => this.scene.start('Profile'));
-    });
+    // ══════════════════════════════════════════════════════════════════════
+    // STATS ROW
+    // ══════════════════════════════════════════════════════════════════════
 
-    // --- Buttons Layout ---
-    const btnPlayY = H * 0.40;
-    const btnDailyY = H * 0.70;
-    const btnLdbY = btnDailyY + 50;
-    const btnShopY = btnLdbY + 50;
-    const coinY = btnShopY + 44;
-    
-    const btnPlayBg = this.createNeonButton(W / 2, btnPlayY, 220, 58, 0xff6eb4, 0xff0088, 'PLAY  GAME', 0);
-    const btnDailyBg = this.createNeonButton(W / 2, btnDailyY, 240, 46, 0x00bb88, 0x00ffcc, '📅 DAILY CHALLENGE', 100);
-    const btnLdbBg = this.createNeonButton(W / 2, btnLdbY, 240, 46, 0xffa500, 0xffe45e, '🏆 LEADERBOARDS', 150);
-    const btnShopBg = this.createNeonButton(W / 2, btnShopY, 200, 46, 0x9b72ff, 0x6600ff, 'SKINS  SHOP', 200);
+    const statsPanel = new StackPanel('stats');
+    statsPanel.isVertical = false;
+    statsPanel.spacing    = 20;
+    statsPanel.verticalAlignment = Control.VERTICAL_ALIGNMENT_CENTER;
+    statsPanel.top   = '-17%';
+    statsPanel.alpha = 0;
+    gui.addControl(statsPanel);
 
-    // Coin display
-    const coinText = this.add.text(W / 2, coinY, `🪙 ${GameData.coins.get()} Coins`, {
-      fontFamily: 'Orbitron', fontSize: '22px', color: '#ffe45e'
-    }).setOrigin(0.5).setAlpha(0);
-    this.tweens.add({ targets: coinText, alpha: 1, delay: 900, duration: 400 });
+    const statDefs = [
+      { emoji: '⭐', val: `${GameData.totalStars()}`, label: 'Stars',  color: '#ffa500' },
+      { emoji: '🔥', val: `${GameData.dailyStreak?.get?.() ?? 0}`,    label: 'Streak', color: '#e67e22' },
+      { emoji: '✅', val: `${GameData.puzzlesSolved?.get?.() ?? 0}`,  label: 'Solved', color: '#27ae60' },
+    ];
 
-    // Mute button
-    this.createMuteButton(W, H);
+    for (const s of statDefs) {
+      const pill = new Rectangle(`stat_${s.label}`);
+      pill.width        = '130px';
+      pill.height       = '64px';
+      pill.background   = '#ffffff';
+      pill.cornerRadius = 18;
+      pill.thickness    = 3;
+      pill.color        = s.color;
+      pill.shadowColor  = s.color;
+      pill.shadowBlur   = 0;
+      pill.shadowOffsetX = 0;
+      pill.shadowOffsetY = 4;
+      statsPanel.addControl(pill);
 
-    // Info
-    this.add.text(W / 2, H * 0.965, '🔄 Drag to rotate  •  👆 Tap to escape  •  💣 Bomb magic!', {
-      fontFamily: 'Orbitron', fontSize: Math.min(W * 0.032, 14) + 'px', color: '#665588'
-    }).setOrigin(0.5);
+      const emojiTxt = new TextBlock(`se_${s.label}`);
+      emojiTxt.text      = `${s.emoji} ${s.val}`;
+      emojiTxt.color     = s.color;
+      emojiTxt.fontSize  = 22;
+      emojiTxt.fontStyle = 'bold';
+      emojiTxt.fontFamily = 'Fredoka, sans-serif';
+      emojiTxt.verticalAlignment = Control.VERTICAL_ALIGNMENT_CENTER;
+      emojiTxt.top = '-10px';
+      pill.addControl(emojiTxt);
 
-    // Button actions
-    btnPlayBg.on('pointerdown', () => {
-      audio.playTap();
-      this.launchBuddyAndTransition();
-    });
+      const labelTxt = new TextBlock(`sl_${s.label}`);
+      labelTxt.text      = s.label.toUpperCase();
+      labelTxt.color     = 'rgba(0,0,0,0.5)';
+      labelTxt.fontSize  = 12;
+      labelTxt.fontFamily = 'Fredoka, sans-serif';
+      labelTxt.verticalAlignment = Control.VERTICAL_ALIGNMENT_BOTTOM;
+      labelTxt.top = '-6px';
+      pill.addControl(labelTxt);
+    }
 
-    btnDailyBg.on('pointerdown', () => {
-      audio.playTap();
-      this.cameras.main.fadeOut(300, 0, 0, 20);
-      this.time.delayedCall(320, () => this.scene.start('DailyChallenge'));
-    });
+    TweenManager.add({ targets: statsPanel, alpha: 1, duration: 400, delay: 600 });
 
-    btnLdbBg.on('pointerdown', () => {
-      audio.playTap();
-      this.cameras.main.fadeOut(300, 0, 0, 20);
-      this.time.delayedCall(320, () => this.scene.start('Leaderboard'));
-    });
+    // ══════════════════════════════════════════════════════════════════════
+    // BUTTONS
+    // ══════════════════════════════════════════════════════════════════════
 
-    btnShopBg.on('pointerdown', () => {
-      audio.playTap();
-      this.cameras.main.fadeOut(300, 0, 0, 20);
-      this.time.delayedCall(320, () => this.scene.start('Shop'));
-    });
+    const panel = new StackPanel('btn_panel');
+    panel.isVertical = true;
+    panel.spacing    = 0;
+    panel.verticalAlignment = Control.VERTICAL_ALIGNMENT_CENTER;
+    panel.top   = '12%';
+    panel.alpha = 0;
+    gui.addControl(panel);
 
-    // Fade in on start
-    this.cameras.main.fadeIn(500, 10, 0, 26);
+    const btnDefs = [
+      { emoji: '▶', label: 'PLAY GAME',        bg: '#2ecc71', glow: '#27ae60', key: 'WorldSelect'    },
+      { emoji: '📅', label: 'DAILY QUEST',      bg: '#f1c40f', glow: '#f39c12', key: 'DailyChallenge' },
+      { emoji: '🏆', label: 'LEADERBOARD',      bg: '#9b59b6', glow: '#8e44ad', key: 'Leaderboard'    },
+      { emoji: '✨', label: 'SKINS SHOP',       bg: '#e91e63', glow: '#c2185b', key: 'Shop'           },
+    ];
 
-    // Start BGM
+    for (const [i, def] of btnDefs.entries()) {
+      const btn = makeBtn(
+        `btn_${def.key}`, def.emoji, def.label,
+        def.bg, def.glow,
+        () => SceneManager.start(def.key)
+      );
+      btn.alpha = 0;
+      panel.addControl(btn);
+      TweenManager.add({ targets: btn, alpha: 1, duration: 400, delay: 700 + i * 80 });
+    }
+
+    TweenManager.add({ targets: panel, alpha: 1, duration: 1, delay: 680 });
+
+    // ══════════════════════════════════════════════════════════════════════
+    // BOTTOM HINT
+    // ══════════════════════════════════════════════════════════════════════
+
+    const hint = new TextBlock('hint');
+    hint.text       = '👆 Tap · 🌀 Swipe to rotate · 🤌 Pinch to zoom';
+    hint.color      = 'rgba(0,0,0,0.6)';
+    hint.fontSize   = 18;
+    hint.fontFamily = 'Fredoka, sans-serif';
+    hint.verticalAlignment = Control.VERTICAL_ALIGNMENT_BOTTOM;
+    hint.top   = '-18px';
+    hint.alpha = 0;
+    gui.addControl(hint);
+    TweenManager.add({ targets: hint, alpha: 1, duration: 500, delay: 1000 });
+
+    // ── BGM ───────────────────────────────────────────────────────────────
     if (!GameData.muted.get()) audio.playBGM();
   }
 
-  private triggerBuddyWiggle() {
-    if (this.buddyState === 'launch') return;
-    this.buddyState = 'wiggle';
-    this.buddyAnimT = 0;
-    this.buddyBumpDy = -20;
-    this.triggerHaptic(20);
-    audio.playTap();
-  }
-
-  private triggerHaptic(pattern: number | number[]) {
-    if (typeof navigator !== 'undefined' && navigator.vibrate) {
-      try { navigator.vibrate(pattern); } catch {}
+  destroy() {
+    if (this.updateFn) {
+      SceneManager.removeUpdateListener(this.updateFn);
     }
-  }
-
-  private launchBuddyAndTransition() {
-    if (this.buddyState === 'launch') return;
-    this.buddyState = 'launch';
-    this.buddyAnimT = 0;
-    this.triggerHaptic([40, 60]);
-    
-    this.time.delayedCall(150, () => {
-      audio.playLaunch();
-    });
-
-    this.time.delayedCall(220, () => {
-      this.cameras.main.fadeOut(350, 10, 0, 26);
-    });
-
-    this.time.delayedCall(580, () => {
-      this.scene.start('WorldSelect');
-    });
-  }
-
-
-
-  private spawnFloatingBlocks(W: number, H: number) {
-    const skins = ['none', 'none', 'wizard', 'crown', 'cat', 'tophat', 'chef', 'propeller', 'rainbow'];
-    for (let i = 0; i < 10; i++) {
-      this.floatingBlocks.push({
-        x: Math.random() * W,
-        y: Math.random() * H,
-        vy: -(0.3 + Math.random() * 0.5),
-        phase: Math.random() * Math.PI * 2,
-        speed: 0.3 + Math.random() * 0.4,
-        worldIdx: Math.floor(Math.random() * 3) + 1,
-        posHash: Math.floor(Math.random() * 8),
-        scale: 0.4 + Math.random() * 0.5,
-        alpha: 0.15 + Math.random() * 0.35,
-        skin: skins[Math.floor(Math.random() * skins.length)]
-      });
-    }
-  }
-
-  private createNeonButton(
-    x: number, y: number, w: number, h: number,
-    fillCol: number, glowCol: number,
-    label: string, delay: number
-  ): Phaser.GameObjects.Container {
-    void glowCol;
-    const container = this.add.container(x, y).setAlpha(0).setDepth(10);
-    container.setSize(w, h);
-    container.setInteractive(new Phaser.Geom.Rectangle(-w / 2, -h / 2, w, h), Phaser.Geom.Rectangle.Contains);
-    container.input!.cursor = 'pointer';
-
-    const bg = this.add.graphics();
-    container.add(bg);
-
-    const labelLen = label.replace(/\p{Emoji}/gu, '  ').length;
-    const maxByH   = Math.round(h * 0.42);
-    const maxByW   = Math.round(w / Math.max(labelLen * 0.52, 1));
-    const fontSize = Math.min(maxByH, maxByW, 22);
-
-    const txt = this.add.text(0, -2, label, {
-      fontFamily: 'Orbitron',
-      fontSize: `${fontSize}px`,
-      color: '#ffffff',
-      stroke: '#000000', strokeThickness: 2.2,
-      align: 'center'
-    }).setOrigin(0.5);
-    container.add(txt);
-
-    const faceCol = fillCol;
-    const shadowCol = blendColor(faceCol, 0x000000, 0.4);
-    const r = h / 2;
-
-    const draw = (state: 'idle' | 'hover' | 'pressed') => {
-      bg.clear();
-      
-      let faceY = -h / 2;
-      let shH = 6;
-      
-      if (state === 'pressed') {
-        faceY = -h / 2 + 4;
-        shH = 2;
-        txt.setY(2);
-      } else {
-        txt.setY(-2);
-      }
-
-      const faceBright = state === 'hover' ? blendColor(faceCol, 0xffffff, 0.15) : faceCol;
-
-      // 1. Draw 3D shadow/thickness (Darker bottom layer)
-      bg.fillStyle(shadowCol, 1);
-      bg.fillRoundedRect(-w / 2, -h / 2 + shH, w, h, r);
-
-      // 2. Draw Main top face
-      bg.fillStyle(faceBright, 1);
-      bg.fillRoundedRect(-w / 2, faceY, w, h, r);
-
-      // 3. Highlight Bevel
-      bg.lineStyle(1.8, 0xffffff, 0.4);
-      bg.beginPath();
-      bg.moveTo(-w / 2 + r, faceY + 1.2);
-      bg.lineTo(w / 2 - r, faceY + 1.2);
-      bg.strokePath();
-    };
-
-    draw('idle');
-
-    container.on('pointerover', () => {
-      draw('hover');
-      this.tweens.add({
-        targets: container,
-        scaleX: 1.05,
-        scaleY: 1.05,
-        duration: 100,
-        ease: 'Quad.Out',
-        overwrite: true
-      });
-    });
-
-    container.on('pointerout', () => {
-      draw('idle');
-      this.tweens.add({
-        targets: container,
-        scaleX: 1.0,
-        scaleY: 1.0,
-        duration: 100,
-        ease: 'Quad.Out',
-        overwrite: true
-      });
-    });
-
-    container.on('pointerdown', () => {
-      draw('pressed');
-      this.tweens.add({
-        targets: container,
-        scaleX: 0.96,
-        scaleY: 0.96,
-        duration: 50,
-        ease: 'Quad.Out',
-        overwrite: true
-      });
-    });
-
-    container.on('pointerup', () => {
-      draw('hover');
-      this.tweens.add({
-        targets: container,
-        scaleX: 1.05,
-        scaleY: 1.05,
-        duration: 80,
-        ease: 'Quad.Out',
-        overwrite: true
-      });
-    });
-
-    // Entrance and idle float
-    this.tweens.add({ targets: container, alpha: 1, duration: 500, delay: 800 + delay, ease: 'Back.Out' });
-    this.tweens.add({ targets: container, y: y - 4, duration: 1400 + delay * 0.5, yoyo: true, repeat: -1, ease: 'Sine.InOut', delay: 1400 });
-
-    return container;
-  }
-
-  private createMuteButton(W: number, H: number) {
-    const btn = this.add.text(W - 45, H - 45, GameData.muted.get() ? '🔇' : '🔊', {
-      fontSize: '26px'
-    }).setOrigin(0.5).setInteractive({ useHandCursor: true });
-
-    btn.on('pointerdown', () => {
-      const muted = GameData.muted.toggle();
-      btn.setText(muted ? '🔇' : '🔊');
-      if (muted) audio.stopBGM(); else audio.playBGM();
-    });
-  }
-
-  update(_time: number, delta: number) {
-    const W = this.scale.width, H = this.scale.height;
-    const dt = Math.min(delta / 1000, 0.1);
-
-    this.blockGfx.clear();
-
-    // 1. Update & draw background floating blocks
-    for (const b of this.floatingBlocks) {
-      b.y += b.vy * dt * 60;
-      b.phase += dt * b.speed;
-      const wobble = Math.sin(b.phase) * 8;
-
-      if (b.y < -80) { b.y = H + 80; b.x = Math.random() * W; }
-
-      const cx = b.x + wobble;
-      const cy = b.y;
-      const s = b.scale;
-      const pal = getBlockPalette(b.worldIdx, b.posHash);
-
-      this.blockGfx.setAlpha(b.alpha);
-
-      const g = this.blockGfx;
-      const tw = TILE_W * s, th = TILE_H * s, bh = BLOCK_H * s;
-
-      const fillPoly = (g2: Phaser.GameObjects.Graphics, coords: number[]) => {
-        g2.beginPath();
-        g2.moveTo(coords[0], coords[1]);
-        for (let i = 2; i < coords.length; i += 2) g2.lineTo(coords[i], coords[i + 1]);
-        g2.closePath();
-        g2.fillPath();
-      };
-
-      g.fillStyle(pal.right, 1); fillPoly(g, [cx+tw,cy, cx,cy+th, cx,cy+th+bh, cx+tw,cy+bh]);
-      g.fillStyle(pal.left, 1);  fillPoly(g, [cx-tw,cy, cx,cy+th, cx,cy+th+bh, cx-tw,cy+bh]);
-      g.fillStyle(pal.top, 1);   fillPoly(g, [cx,cy-th, cx+tw,cy, cx,cy+th, cx-tw,cy]);
-
-      // Glossy shine
-      g.fillStyle(0xffffff, 0.2);
-      fillPoly(g, [cx, cy-th, cx+tw*0.5, cy-th*0.5, cx, cy+th*0.5, cx-tw, cy]);
-
-      // Bevel lines
-      g.lineStyle(1 * s, 0xffffff, 0.3);
-      g.beginPath();
-      g.moveTo(cx-tw, cy); g.lineTo(cx, cy+th); g.lineTo(cx+tw, cy);
-      g.strokePath();
-
-      g.lineStyle(1, pal.glow, 0.5);
-      g.beginPath();
-      g.moveTo(cx, cy-th); g.lineTo(cx+tw, cy); g.lineTo(cx, cy+th); g.lineTo(cx-tw, cy);
-      g.closePath();
-      g.strokePath();
-
-      drawHat(g, cx, cy, tw, th, b.skin, this.time.now);
-    }
-    this.blockGfx.setAlpha(1);
-
-    // 2. Update Giant Buddy Animation State
-    this.buddyAnimT += dt;
-
-    // Eye blinking timer
-    this.blinkTimer -= dt;
-    if (this.blinkTimer <= 0) {
-      this.isBlinking = true;
-      this.blinkTimer = 2.0 + Math.random() * 4.0;
-      this.time.delayedCall(120, () => { this.isBlinking = false; });
-    }
-
-    if (this.buddyState === 'idle') {
-      const breath = Math.sin(this.time.now * 0.003) * 0.025;
-      this.buddyScalePara = 1.0 + breath;
-      this.buddyScalePerp = 1.0 - breath;
-      this.buddyAngle = 0;
-      this.buddyX = W / 2;
-      this.buddyY = this.buddyBaseY + Math.sin(this.time.now * 0.002) * 4;
-
-      // Pointer drag/hover react
-      const pointer = this.input.activePointer;
-      const dist = Math.hypot(pointer.x - this.buddyX, pointer.y - this.buddyY);
-      if (dist < 130 && pointer.isDown) {
-        // Dragging & stretching
-        const dx = pointer.x - this.buddyX;
-        const dy = pointer.y - this.buddyY;
-        const len = Math.hypot(dx, dy) || 1;
-        this.buddyAngle = Math.atan2(dy, dx);
-        
-        const stretch = Math.min(1.35, 1.0 + len * 0.004);
-        this.buddyScalePara = stretch;
-        this.buddyScalePerp = 1 / stretch;
-
-        this.buddyX = W / 2 + dx * 0.25;
-        this.buddyY = this.buddyBaseY + dy * 0.25;
-      } else if (dist < 130) {
-        // Hover squeeze
-        const dx = pointer.x - this.buddyX;
-        const dy = pointer.y - this.buddyY;
-        this.buddyAngle = Math.atan2(dy, dx);
-
-        const squeeze = 1.0 - (1.0 - dist / 130) * 0.12;
-        this.buddyScalePara = squeeze;
-        this.buddyScalePerp = 2.0 - squeeze;
-      }
-    } else if (this.buddyState === 'wiggle') {
-      const dur = 0.70;
-      const scaleAmp = Math.sin(this.buddyAnimT * Math.PI * 6) * Math.exp(-this.buddyAnimT * 4.5);
-      this.buddyScalePara = 1.0 - 0.45 * scaleAmp;
-      this.buddyScalePerp = 1.0 + 0.35 * scaleAmp;
-      this.buddyY = this.buddyBaseY + this.buddyBumpDy * scaleAmp;
-
-      if (this.buddyAnimT >= dur) {
-        this.buddyState = 'idle';
-        this.buddyAnimT = 0;
-      }
-    } else if (this.buddyState === 'launch') {
-      if (this.buddyAnimT < 0.15) {
-        // Anticipation squeeze down
-        this.buddyScalePara = 0.65;
-        this.buddyScalePerp = 1.35;
-        this.buddyY = this.buddyBaseY + 16;
-        this.buddyAngle = Math.PI / 2; // vertical squash
-      } else {
-        // Stretch and shoot up!
-        const flyT = this.buddyAnimT - 0.15;
-        this.buddyScalePara = 1.48;
-        this.buddyScalePerp = 0.68;
-        this.buddyY = this.buddyBaseY + 16 - flyT * flyT * 1800 - flyT * 500;
-        this.buddyAngle = Math.PI / 2; // vertical stretch
-      }
-    }
-
-    // 3. Render Giant Buddy
-    const g = this.blockGfx;
-    const cx = this.buddyX;
-    const cy = this.buddyY;
-    const s = 1.8; // scale factor
-    const tw = TILE_W * s;
-    const th = TILE_H * s;
-    const bh = BLOCK_H * s;
-
-    const pal = getBlockPalette(1, 4); // World 1 pink
-    const scalePara = this.buddyScalePara;
-    const scalePerp = this.buddyScalePerp;
-    const angle = this.buddyAngle;
-    const cos = Math.cos(angle);
-    const sin = Math.sin(angle);
-
-    const giantTransformer = (x: number, y: number) => {
-      const dx = x - cx;
-      const dy = y - (cy + bh / 2);
-      const rx = dx * cos + dy * sin;
-      const ry = -dx * sin + dy * cos;
-      const rxScaled = rx * scalePara;
-      const ryScaled = ry * scalePerp;
-      const dxPrime = rxScaled * cos - ryScaled * sin;
-      const dyPrime = rxScaled * sin + ryScaled * cos;
-      return { x: cx + dxPrime, y: (cy + bh / 2) + dyPrime };
-    };
-
-    const tPt = (x: number, y: number) => giantTransformer(x, y);
-
-    const fillTransformedRect = (x: number, y: number, w: number, h: number) => {
-      const p1 = tPt(x, y);
-      const p2 = tPt(x + w, y);
-      const p3 = tPt(x + w, y + h);
-      const p4 = tPt(x, y + h);
-      g.beginPath();
-      g.moveTo(p1.x, p1.y);
-      g.lineTo(p2.x, p2.y);
-      g.lineTo(p3.x, p3.y);
-      g.lineTo(p4.x, p4.y);
-      g.closePath();
-      g.fillPath();
-    };
-
-    const scaleX = scalePara * Math.abs(cos) + scalePerp * Math.abs(sin);
-    const scaleY = scalePara * Math.abs(sin) + scalePerp * Math.abs(cos);
-
-    drawIsoCube(g, cx, cy, pal.top, pal.left, pal.right, pal.glow, 0.72, giantTransformer, 1, this.time.now);
-
-    // Draw face
-    const eyeY = cy - th * 0.15;
-    const eyeScaleY = this.isBlinking ? 0.15 : 1;
-
-    g.fillStyle(0x111111, 1);
-    const le = tPt(cx - 15, eyeY);
-    g.fillEllipse(le.x, le.y, 12 * scaleX, 10 * eyeScaleY * scaleY);
-    const re = tPt(cx + 15, eyeY);
-    g.fillEllipse(re.x, re.y, 12 * scaleX, 10 * eyeScaleY * scaleY);
-
-    if (!this.isBlinking) {
-      g.fillStyle(0xffffff, 0.85);
-      const lhl = tPt(cx - 13, eyeY - 2);
-      const rhl = tPt(cx + 17, eyeY - 2);
-      g.fillCircle(lhl.x, lhl.y, 3 * Math.min(scaleX, scaleY));
-      g.fillCircle(rhl.x, rhl.y, 3 * Math.min(scaleX, scaleY));
-
-      // blush
-      g.fillStyle(0xff79a8, 0.45);
-      const lc = tPt(cx - 24, eyeY + 6);
-      const rc = tPt(cx + 24, eyeY + 6);
-      g.fillEllipse(lc.x, lc.y, 14 * scaleX, 6 * scaleY);
-      g.fillEllipse(rc.x, rc.y, 14 * scaleX, 6 * scaleY);
-    }
-
-    if (this.buddyState === 'wiggle') {
-      g.fillStyle(0x111111, 1);
-      fillTransformedRect(cx - 20, eyeY - 2, 9, 2.5);
-      fillTransformedRect(cx - 16, eyeY - 6, 2.5, 9.5);
-      fillTransformedRect(cx + 11, eyeY - 2, 9, 2.5);
-      fillTransformedRect(cx + 15, eyeY - 6, 2.5, 9.5);
-    } else {
-      const s1 = tPt(cx - 7, eyeY + 12);
-      const s1m = tPt(cx - 3.5, eyeY + 15.5);
-      const s2 = tPt(cx, eyeY + 17.5);
-      const s2m = tPt(cx + 3.5, eyeY + 15.5);
-      const s3 = tPt(cx + 7, eyeY + 12);
-      g.lineStyle(3, 0x333333, 0.9);
-      g.beginPath();
-      g.moveTo(s1.x, s1.y);
-      g.lineTo(s1m.x, s1m.y);
-      g.lineTo(s2.x, s2.y);
-      g.lineTo(s2m.x, s2m.y);
-      g.lineTo(s3.x, s3.y);
-      g.strokePath();
-    }
-
-    // Hat
-    drawHat(g, cx, cy, tw, th, this.buddySkin, this.time.now, giantTransformer);
   }
 }

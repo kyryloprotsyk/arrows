@@ -44,7 +44,15 @@ class LevelGenerator {
 
   generateLevel(worldIndex: number, levelIndex: number): LevelData {
     const coords = this.getShapeCoords(worldIndex, levelIndex);
-    const blocks = this.backSolve(coords);
+
+    // Retry generation up to 8 times to ensure a solvable puzzle
+    let blocks: BlockConfig[] = [];
+    let attempts = 0;
+    do {
+      blocks = this.backSolve(coords);
+      attempts++;
+    } while (!this.isSolvable(blocks) && attempts < 8);
+
     this.injectSpecials(blocks, worldIndex, levelIndex);
 
     let multiplier = 1.35;
@@ -66,6 +74,61 @@ class LevelGenerator {
       moveLimit,
       par
     };
+  }
+
+  /**
+   * BFS-style solvability check: repeatedly removes any block whose escape path
+   * is currently clear.  Returns true if all blocks can eventually be cleared.
+   * Rainbow blocks can always find a free direction, bombs self-remove — both are
+   * treated as always escapable for this simplified check.
+   */
+  private isSolvable(blocks: BlockConfig[]): boolean {
+    let remaining = blocks.map(b => ({ ...b }));
+    let changed = true;
+    while (changed) {
+      changed = false;
+      const stuck: BlockConfig[] = [];
+      for (const b of remaining) {
+        const others = remaining.filter(o => o.id !== b.id);
+        if (b.type === 'rainbow' || b.type === 'bomb') {
+          // Rainbow finds any free direction; bomb self-destructs — always escapable
+          changed = true;
+        } else if (b.type === 'chest') {
+          // Chest escapes only when its key has already escaped
+          const hasKey = remaining.some(o => o.type === 'key' && o.targetChestId === b.id);
+          if (!hasKey && this.canEscapeSimple(b, others)) {
+            changed = true;
+          } else {
+            stuck.push(b);
+          }
+        } else {
+          if (this.canEscapeSimple(b, others)) {
+            changed = true;
+          } else {
+            stuck.push(b);
+          }
+        }
+      }
+      remaining = stuck;
+    }
+    return remaining.length === 0;
+  }
+
+  /** Returns true if block b's escape direction is unobstructed by others. */
+  private canEscapeSimple(b: BlockConfig, others: BlockConfig[]): boolean {
+    const dir = b.dir;
+    for (const other of others) {
+      const diff = { x: other.x - b.x, y: other.y - b.y, z: other.z - b.z };
+      const dot = diff.x * dir.x + diff.y * dir.y + diff.z * dir.z;
+      if (dot > 0.05) {
+        const proj = { x: dir.x * dot, y: dir.y * dot, z: dir.z * dot };
+        const rem  = { x: diff.x - proj.x, y: diff.y - proj.y, z: diff.z - proj.z };
+        if (Math.abs(rem.x) < 0.1 && Math.abs(rem.y) < 0.1 && Math.abs(rem.z) < 0.1) {
+          return false; // blocked
+        }
+      }
+    }
+    return true;
   }
 
   private getShapeCoords(w: number, l: number): Vec3[] {
@@ -472,9 +535,20 @@ class LevelGenerator {
       }
 
       if (!placed_) {
-        // Force place with random dir (fallback)
-        const d = dirs[0];
-        blocks.push({ id: `b${id++}`, x: pos.x, y: pos.y, z: pos.z, dir: d, type: 'normal' });
+        // Fallback: pick the direction that has the fewest future blockers
+        // (prefer directions along axes that have fewer placed blocks nearby)
+        let bestDir = dirs[0];
+        let minBlocked = Infinity;
+        for (const d of dirs) {
+          let blockCount = 0;
+          for (const p of placed) {
+            const diff = v3sub(p, pos);
+            const dot = v3dot(diff, d);
+            if (dot > 0.05) blockCount++;
+          }
+          if (blockCount < minBlocked) { minBlocked = blockCount; bestDir = d; }
+        }
+        blocks.push({ id: `b${id++}`, x: pos.x, y: pos.y, z: pos.z, dir: bestDir, type: 'normal' });
         placed.push(pos);
         remaining.splice(ti, 1);
       }

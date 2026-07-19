@@ -1,70 +1,36 @@
-/* main.ts — Phaser 3 game bootstrap */
+/* main.ts — Pure Babylon.js bootstrap */
 import './style.css';
-import Phaser from 'phaser';
-import { BootScene }        from './scenes/BootScene';
-import { MenuScene }        from './scenes/MenuScene';
+import { BabylonEngine } from './babylon/BabylonEngine';
+import { SceneManager } from './babylon/SceneManager';
+import { BootScene } from './scenes/BootScene';
+import { MenuScene } from './scenes/MenuScene';
 import { WorldSelectScene } from './scenes/WorldSelectScene';
 import { LevelSelectScene } from './scenes/LevelSelectScene';
-import { GameScene }        from './scenes/GameScene';
-import { VictoryScene }     from './scenes/VictoryScene';
-import { ShopScene }        from './scenes/ShopScene';
+import { GameScene } from './scenes/GameScene';
+import { VictoryScene } from './scenes/VictoryScene';
+import { ShopScene } from './scenes/ShopScene';
 import { DailyChallengeScene } from './scenes/DailyChallengeScene';
-import { LeaderboardScene }    from './scenes/LeaderboardScene';
-import { ProfileScene }        from './scenes/ProfileScene';
-import { DefeatScene }      from './scenes/DefeatScene';
+import { LeaderboardScene } from './scenes/LeaderboardScene';
+import { ProfileScene } from './scenes/ProfileScene';
+import { DefeatScene } from './scenes/DefeatScene';
 
-function getViewport() {
-  const container = document.getElementById('game-container');
-  if (container) {
-    return {
-      w: container.clientWidth,
-      h: container.clientHeight
-    };
-  }
-  const vvp = window.visualViewport;
-  return {
-    w: vvp ? vvp.width  : window.innerWidth,
-    h: vvp ? vvp.height : window.innerHeight
-  };
-}
+const canvas = document.getElementById('babylon-canvas') as HTMLCanvasElement;
+BabylonEngine.getInstance().init(canvas);
 
-const { w, h } = getViewport();
+// Register scenes
+SceneManager.register('Boot', BootScene);
+SceneManager.register('Menu', MenuScene);
+SceneManager.register('WorldSelect', WorldSelectScene);
+SceneManager.register('LevelSelect', LevelSelectScene);
+SceneManager.register('Game', GameScene);
+SceneManager.register('Victory', VictoryScene);
+SceneManager.register('Defeat', DefeatScene);
+SceneManager.register('Shop', ShopScene);
+SceneManager.register('DailyChallenge', DailyChallengeScene);
+SceneManager.register('Leaderboard', LeaderboardScene);
+SceneManager.register('Profile', ProfileScene);
 
-const config: Phaser.Types.Core.GameConfig = {
-  type: Phaser.AUTO,
-  parent: 'game-container',
-  backgroundColor: '#0a001a',
-  scene: [BootScene, MenuScene, WorldSelectScene, LevelSelectScene, GameScene, VictoryScene, DefeatScene, ShopScene, DailyChallengeScene, LeaderboardScene, ProfileScene],
-  scale: {
-    mode: Phaser.Scale.RESIZE,
-    autoCenter: Phaser.Scale.CENTER_BOTH,
-    width: w,
-    height: h
-  },
-  render: {
-    antialias: true,
-    powerPreference: 'high-performance'
-  },
-  input: {
-    activePointers: 3  // Support up to 3 touch points (pinch zoom)
-  }
-};
+// Start game
+SceneManager.start('Boot').catch(console.error);
 
-const game = new Phaser.Game(config);
-
-/** Resize handler — also fires on orientation change. */
-function onResize() {
-  const { w: nw, h: nh } = getViewport();
-  game.scale.resize(nw, nh);
-}
-
-window.addEventListener('resize', onResize);
-window.addEventListener('orientationchange', () => {
-  // Short delay gives the browser time to re-layout after rotation
-  setTimeout(onResize, 150);
-});
-
-// Also listen on visualViewport (handles soft-keyboard appearing/disappearing)
-window.visualViewport?.addEventListener('resize', onResize);
-
-console.log('🎮 Arrow Buddies 3D — Phaser Edition initialized!');
+console.log('🎮 Arrow Buddies 3D — Babylon Edition initialized!');

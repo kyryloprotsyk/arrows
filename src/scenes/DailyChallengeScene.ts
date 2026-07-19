@@ -1,153 +1,153 @@
-/* DailyChallengeScene.ts — 7-Day Streak Calendar & Procedural Daily Puzzle Lobby */
-import Phaser from 'phaser';
+/* DailyChallengeScene.ts — Babylon.js Daily Challenge lobby */
+import type { IGameScene } from '../babylon/SceneManager';
+import { BabylonGUI } from '../babylon/BabylonGUI';
+import { SceneManager } from '../babylon/SceneManager';
+import { TweenManager } from '../babylon/TweenManager';
 import { GameData } from '../utils/GameData';
 import { audio } from '../audio';
-import { createCartoonButton } from '../utils/IsoHelper';
+import { Control, TextBlock, Rectangle, Button, StackPanel } from '@babylonjs/gui';
+import type { Scene as BjsScene } from '@babylonjs/core';
 
-export class DailyChallengeScene extends Phaser.Scene {
-  constructor() { super({ key: 'DailyChallenge' }); }
+export class DailyChallengeScene implements IGameScene {
+  key = 'DailyChallenge';
 
-  create() {
-    const W = this.scale.width, H = this.scale.height;
+  create(_scene: BjsScene) {
+    const gui = BabylonGUI.createFullscreenUI('daily_ui');
 
-    this.cameras.main.setBackgroundColor('#0a001a');
-    this.cameras.main.fadeIn(400, 10, 0, 26);
-
-    // Star background
-    const bg = this.add.graphics();
-    bg.fillStyle(0x0a001a, 1);
-    bg.fillRect(0, 0, W, H);
-    for (let i = 0; i < 70; i++) {
-      bg.fillStyle(0xffffff, 0.2 + Math.random() * 0.5);
-      bg.fillCircle(Math.random() * W, Math.random() * H, Math.random() * 1.5 + 0.3);
-    }
+    // Warm peach background
+    const bg = new Rectangle();
+    bg.width = '100%'; bg.height = '100%';
+    bg.background = '#fff5ea'; bg.thickness = 0;
+    gui.addControl(bg);
 
     // Header
-    this.add.text(W / 2, H * 0.10, '📅 Daily Challenge', {
-      fontFamily: 'Orbitron',
-      fontSize: Math.min(W * 0.08, 36) + 'px',
-      color: '#00ffcc',
-      shadow: { offsetX: 0, offsetY: 4, color: '#008866', blur: 16, fill: true }
-    }).setOrigin(0.5);
+    const title = new TextBlock();
+    title.text = '📅 Daily Challenge';
+    title.color = '#ff9f1c';
+    title.fontSize = 36;
+    title.fontStyle = 'bold';
+    title.fontFamily = 'Fredoka, sans-serif';
+    title.shadowColor = '#5c3d2e';
+    title.shadowBlur = 0;
+    title.shadowOffsetX = 3;
+    title.shadowOffsetY = 3;
+    title.top = '-43%';
+    title.verticalAlignment = Control.VERTICAL_ALIGNMENT_CENTER;
+    title.alpha = 0;
+    gui.addControl(title);
+    TweenManager.add({ targets: title, alpha: 1, duration: 500, delay: 100 });
 
-    const todayStr = new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' });
-    this.add.text(W / 2, H * 0.16, `Today: ${todayStr}`, {
-      fontFamily: 'Orbitron', fontSize: '18px', color: '#ccbbed'
-    }).setOrigin(0.5);
+    // Streak info
+    const streak = GameData.dailyStreak?.get?.() ?? 0;
+    const streakTxt = new TextBlock();
+    streakTxt.text = `🔥 Streak: ${streak} days`;
+    streakTxt.color = '#ffa500';
+    streakTxt.fontSize = 20;
+    streakTxt.fontStyle = 'bold';
+    streakTxt.fontFamily = 'Fredoka, sans-serif';
+    streakTxt.top = '-35%';
+    streakTxt.verticalAlignment = Control.VERTICAL_ALIGNMENT_CENTER;
+    streakTxt.alpha = 0;
+    gui.addControl(streakTxt);
+    TweenManager.add({ targets: streakTxt, alpha: 1, duration: 500, delay: 250 });
 
-    // Current Streak Info
-    const currentStreak = GameData.dailyStreak.get();
-    const lastPlayed = GameData.dailyStreak.lastPlayed();
-    const todayISO = new Date().toISOString().slice(0, 10);
-    const alreadyPlayedToday = (lastPlayed === todayISO);
+    // Calendar row — last 7 days
+    const calRow = new StackPanel();
+    calRow.isVertical = false;
+    calRow.top = '-22%';
+    calRow.width = '360px';
+    calRow.height = '60px';
+    calRow.verticalAlignment = Control.VERTICAL_ALIGNMENT_CENTER;
+    gui.addControl(calRow);
 
-    this.add.text(W / 2, H * 0.22, `🔥 Current Streak: Day ${currentStreak} of 7`, {
-      fontFamily: 'Orbitron', fontSize: '18px', color: '#ffe45e', fontStyle: 'bold'
-    }).setOrigin(0.5);
-
-    // Draw 7-Day Timeline Card Grid
-    const cardW = Math.min((W * 0.88) / 7, 85);
-    const cardH = cardW * 1.35;
-    const totalGridW = cardW * 7 + 6 * 8;
-    const startX = W / 2 - totalGridW / 2 + cardW / 2;
-    const gridY = H * 0.45;
-
-    const g = this.add.graphics();
-
-    for (let day = 1; day <= 7; day++) {
-      const cx = startX + (day - 1) * (cardW + 8);
-      const isPast = day < currentStreak || (day === currentStreak && alreadyPlayedToday);
-      const isCurrent = (day === currentStreak && !alreadyPlayedToday);
-
-      // Card bg
-      g.fillStyle(isCurrent ? 0x2d1254 : isPast ? 0x112233 : 0x150826, 1);
-      g.fillRoundedRect(cx - cardW / 2, gridY - cardH / 2, cardW, cardH, 12);
-
-      // Border
-      const borderCol = isCurrent ? 0x00ffcc : isPast ? 0x44aa88 : 0x443366;
-      g.lineStyle(isCurrent ? 3 : 1.5, borderCol, 1);
-      g.strokeRoundedRect(cx - cardW / 2, gridY - cardH / 2, cardW, cardH, 12);
-
-      // Day label
-      this.add.text(cx, gridY - cardH * 0.32, `Day ${day}`, {
-        fontFamily: 'Orbitron', fontSize: Math.min(cardW * 0.24, 14) + 'px',
-        color: isCurrent ? '#00ffcc' : '#ffffff'
-      }).setOrigin(0.5);
-
-      // Reward icon & text
-      let icon = '🪙';
-      let amountTxt = `+${day * 50}`;
-      if (day === 7) {
-        icon = '🐉';
-        amountTxt = 'Dragon Skin!';
-      } else if (day === 5) {
-        icon = '👑';
-        amountTxt = 'Gold Crown!';
-      }
-
-      this.add.text(cx, gridY - cardH * 0.02, icon, {
-        fontSize: Math.min(cardW * 0.42, 28) + 'px'
-      }).setOrigin(0.5);
-
-      this.add.text(cx, gridY + cardH * 0.3, amountTxt, {
-        fontFamily: 'Orbitron', fontSize: Math.min(cardW * 0.18, 11) + 'px',
-        color: '#ffe45e', align: 'center'
-      }).setOrigin(0.5);
-
-      if (isPast) {
-        // Checkmark overlay
-        this.add.text(cx, gridY, '✅', { fontSize: '24px' }).setOrigin(0.5).setAlpha(0.85);
-      }
+    for (let d = 6; d >= 0; d--) {
+      const completed = d >= (7 - streak);
+      const dot = new Rectangle();
+      dot.width = '42px'; dot.height = '42px';
+      dot.background = completed ? '#2ecc71' : '#f0e6d6';
+      dot.color = completed ? '#27ae60' : '#d5c7b3';
+      dot.cornerRadius = 14; dot.thickness = 3;
+      dot.paddingRight = '6px';
+      calRow.addControl(dot);
+      const dTxt = new TextBlock();
+      dTxt.text = completed ? '✓' : String(d + 1);
+      dTxt.color = completed ? '#ffffff' : '#9999aa';
+      dTxt.fontSize = 18;
+      dTxt.fontStyle = 'bold';
+      dTxt.fontFamily = 'Fredoka, sans-serif';
+      dot.addControl(dTxt);
     }
 
-    // Action Button
-    const btnY = H * 0.78;
-    const btnContainer = this.add.container(W / 2, btnY).setDepth(10);
-    const btnW = Math.min(W * 0.75, 300), btnH = 56;
-    const btnGfx = this.add.graphics();
+    // Desc
+    const desc = new TextBlock();
+    desc.text = 'Today\'s special puzzle — New challenge every 24 hours!';
+    desc.color = '#7f8c8d';
+    desc.fontSize = 16;
+    desc.fontStyle = 'bold';
+    desc.fontFamily = 'Fredoka, sans-serif';
+    desc.top = '-10%';
+    desc.verticalAlignment = Control.VERTICAL_ALIGNMENT_CENTER;
+    desc.textWrapping = true;
+    desc.width = '340px';
+    desc.alpha = 0;
+    gui.addControl(desc);
+    TweenManager.add({ targets: desc, alpha: 1, duration: 400, delay: 400 });
 
-    const drawBtn = (hover: boolean) => {
-      btnGfx.clear();
-      const fill = alreadyPlayedToday ? 0x444455 : hover ? 0x00e6b8 : 0x00bb88;
-      btnGfx.fillStyle(fill, 1);
-      btnGfx.fillRoundedRect(-btnW / 2, -btnH / 2, btnW, btnH, 28);
-      if (!alreadyPlayedToday) {
-        for (let p = 0; p < 3; p++) {
-          btnGfx.lineStyle([5, 3, 1.5][p], 0x00ffcc, [0.15, 0.35, 0.8][p]);
-          btnGfx.strokeRoundedRect(-btnW / 2, -btnH / 2, btnW, btnH, 28);
-        }
-      }
-    };
-    drawBtn(false);
-
-    const btnLabelStr = alreadyPlayedToday ? '⏳ Come Back Tomorrow!' : '🚀 Play Daily Challenge!';
-    const btnFontSize = Math.min(Math.round(btnH * 0.38), Math.round(btnW / Math.max(btnLabelStr.length * 0.5, 1)), 18);
-    const btnLabel = this.add.text(0, 0, btnLabelStr, {
-      fontFamily: 'Orbitron', fontSize: `${btnFontSize}px`, color: '#0a001a', fontStyle: 'bold', align: 'center'
-    }).setOrigin(0.5);
-
-    btnContainer.add([btnGfx, btnLabel]);
-
-    if (!alreadyPlayedToday) {
-      btnContainer.setInteractive(new Phaser.Geom.Rectangle(-btnW / 2, -btnH / 2, btnW, btnH), Phaser.Geom.Rectangle.Contains);
-      btnContainer.input!.cursor = 'pointer';
-      btnContainer.on('pointerover', () => drawBtn(true));
-      btnContainer.on('pointerout',  () => drawBtn(false));
-      btnContainer.on('pointerdown', () => {
-        audio.playTap();
-        this.cameras.main.fadeOut(300, 10, 0, 26);
-        this.time.delayedCall(320, () => {
-          // Launch GameScene with daily flag
-          this.scene.start('Game', { world: 3, level: (new Date().getDate() % 5) + 1, isDaily: true });
-        });
-      });
-    }
-
-    // Back button
-    createCartoonButton(this, 75, 38, 100, 42, '◀ Menu', () => {
+    // Play button (green cartoon button)
+    const playBtn = Button.CreateSimpleButton('btn_play', '▶  Play Daily Puzzle');
+    playBtn.width = '260px'; playBtn.height = '62px';
+    playBtn.color = '#ffffff'; playBtn.fontSize = 20;
+    playBtn.fontStyle = 'bold';
+    playBtn.fontFamily = 'Fredoka, sans-serif';
+    playBtn.background = '#2ecc71';
+    (playBtn as any).color = '#27ae60'; // border color
+    playBtn.cornerRadius = 24; playBtn.thickness = 3;
+    playBtn.shadowColor = '#27ae60';
+    playBtn.shadowBlur = 0;
+    playBtn.shadowOffsetX = 0;
+    playBtn.shadowOffsetY = 4;
+    playBtn.top = '8%';
+    playBtn.verticalAlignment = Control.VERTICAL_ALIGNMENT_CENTER;
+    playBtn.alpha = 0;
+    gui.addControl(playBtn);
+    TweenManager.add({ targets: playBtn, alpha: 1, duration: 500, delay: 600 });
+    playBtn.onPointerEnterObservable.add(() => { playBtn.scaleX = 1.03; playBtn.scaleY = 1.03; playBtn.shadowOffsetY = 5; });
+    playBtn.onPointerOutObservable.add(() => { playBtn.scaleX = 1.0; playBtn.scaleY = 1.0; playBtn.shadowOffsetY = 4; });
+    playBtn.onPointerDownObservable.add(() => { playBtn.scaleX = 0.97; playBtn.scaleY = 0.97; playBtn.shadowOffsetY = 1; });
+    playBtn.onPointerUpObservable.add(() => {
+      playBtn.scaleX = 1.0; playBtn.scaleY = 1.0;
+      playBtn.shadowOffsetY = 4;
       audio.playTap();
-      this.cameras.main.fadeOut(300, 10, 0, 26);
-      this.time.delayedCall(320, () => this.scene.start('Menu'));
-    }, { bgColor: 0x9b72ff, fontSize: 16 });
+      const seed = new Date().toISOString().slice(0, 10).replace(/-/g, '');
+      SceneManager.start('Game', { world: 1, level: parseInt(seed) % 10 + 1, isDaily: true });
+    });
+
+    // Back button (pink cartoon button)
+    const backBtn = Button.CreateSimpleButton('btn_back', '← Menu');
+    backBtn.width = '140px'; backBtn.height = '44px';
+    backBtn.color = '#ffffff'; backBtn.fontSize = 18;
+    backBtn.fontStyle = 'bold';
+    backBtn.fontFamily = 'Fredoka, sans-serif';
+    backBtn.background = '#e91e63';
+    (backBtn as any).color = '#c2185b'; // border color
+    backBtn.cornerRadius = 20; backBtn.thickness = 3;
+    backBtn.shadowColor = '#c2185b';
+    backBtn.shadowBlur = 0;
+    backBtn.shadowOffsetX = 0;
+    backBtn.shadowOffsetY = 4;
+    backBtn.top = '46%';
+    backBtn.verticalAlignment = Control.VERTICAL_ALIGNMENT_CENTER;
+    backBtn.alpha = 0;
+    gui.addControl(backBtn);
+    TweenManager.add({ targets: backBtn, alpha: 1, duration: 400, delay: 700 });
+    backBtn.onPointerEnterObservable.add(() => { backBtn.scaleX = 1.03; backBtn.scaleY = 1.03; backBtn.shadowOffsetY = 5; });
+    backBtn.onPointerOutObservable.add(() => { backBtn.scaleX = 1.0; backBtn.scaleY = 1.0; backBtn.shadowOffsetY = 4; });
+    backBtn.onPointerDownObservable.add(() => { backBtn.scaleX = 0.97; backBtn.scaleY = 0.97; backBtn.shadowOffsetY = 1; });
+    backBtn.onPointerUpObservable.add(() => {
+      backBtn.scaleX = 1.0; backBtn.scaleY = 1.0;
+      backBtn.shadowOffsetY = 4;
+      audio.playTap();
+      SceneManager.start('Menu');
+    });
   }
 }

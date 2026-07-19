@@ -1,213 +1,139 @@
-/* WorldSelectScene.ts — World selection with parallax, lock animations */
-import Phaser from 'phaser';
+/* WorldSelectScene.ts — Babylon.js world selection */
+import type { IGameScene } from '../babylon/SceneManager';
+import { BabylonGUI } from '../babylon/BabylonGUI';
+import { SceneManager } from '../babylon/SceneManager';
+import { TweenManager } from '../babylon/TweenManager';
+import { BabylonBackground } from '../babylon/BabylonBackground';
 import { GameData } from '../utils/GameData';
 import { audio } from '../audio';
-import { hslToInt, createCartoonButton } from '../utils/IsoHelper';
+import { Control, TextBlock, Rectangle, Button, StackPanel } from '@babylonjs/gui';
+import type { Scene as BjsScene } from '@babylonjs/core';
+import { hslToInt } from '../utils/IsoHelper';
 
 const WORLDS = [
-  { id: 1, name: 'Jelly Hills',    emoji: '🌸', hue: 330, desc: 'Sweet & simple puzzles',  starsNeeded: 0 },
-  { id: 2, name: 'Dino Valley',    emoji: '🦕', hue: 140, desc: 'Bombs, keys & chests!',   starsNeeded: 5 },
-  { id: 3, name: 'Cosmo Station',  emoji: '🚀', hue: 225, desc: 'Rainbow magic & chaos!',  starsNeeded: 10 },
-  { id: 4, name: 'Coral Reef',     emoji: '🐠', hue: 175, desc: 'Rotator waves & corals!', starsNeeded: 15 },
+  { id: 1, name: 'Jelly Hills',    emoji: '🌸', hue: 330, desc: 'Sweet & simple puzzles',   starsNeeded: 0  },
+  { id: 2, name: 'Dino Valley',    emoji: '🦕', hue: 140, desc: 'Bombs, keys & chests!',    starsNeeded: 5  },
+  { id: 3, name: 'Cosmo Station',  emoji: '🚀', hue: 225, desc: 'Rainbow magic & chaos!',   starsNeeded: 10 },
+  { id: 4, name: 'Coral Reef',     emoji: '🐠', hue: 175, desc: 'Rotator waves & corals!',  starsNeeded: 15 },
   { id: 5, name: 'Ice Castle',     emoji: '❄️', hue: 195, desc: 'Chilled locks & spires!',  starsNeeded: 22 },
-  { id: 6, name: 'Volcanic Land',  emoji: '🌋', hue: 10,  desc: 'Magma cores & high danger!',starsNeeded: 30 }
+  { id: 6, name: 'Volcanic Land',  emoji: '🌋', hue: 10,  desc: 'Magma cores & high danger!',starsNeeded: 30 },
 ];
 
-export class WorldSelectScene extends Phaser.Scene {
-  constructor() { super({ key: 'WorldSelect' }); }
+function intToHex(n: number): string {
+  return '#' + n.toString(16).padStart(6, '0');
+}
 
-  create() {
-    const W = this.scale.width, H = this.scale.height;
+export class WorldSelectScene implements IGameScene {
+  key = 'WorldSelect';
+
+  create(scene: BjsScene) {
+    BabylonBackground.initScene(scene, 1);
+
+    const gui = BabylonGUI.createFullscreenUI('world_select_ui');
     const totalStars = GameData.totalStars();
 
-    // Dark bg
-    this.cameras.main.setBackgroundColor('#0a001a');
-    this.cameras.main.fadeIn(400, 10, 0, 26);
-
-    // Animated starfield bg
-    this.addStarfield(W, H);
+    // Warm peach background
+    const bg = new Rectangle();
+    bg.width = '100%'; bg.height = '100%';
+    bg.background = '#fff5ea'; bg.thickness = 0;
+    gui.addControl(bg);
 
     // Title
-    this.add.text(W / 2, H * 0.08, '🌍  Choose a World', {
-      fontFamily: 'Orbitron', fontSize: Math.min(W * 0.08, 38) + 'px',
-      color: '#ffffff',
-      shadow: { offsetX: 0, offsetY: 4, color: '#6600ff', blur: 18, fill: true }
-    }).setOrigin(0.5);
+    const title = new TextBlock();
+    title.text = '🌍  Choose a World';
+    title.color = '#ff9f1c';
+    title.fontSize = 38;
+    title.fontStyle = 'bold';
+    title.fontFamily = 'Fredoka, sans-serif';
+    title.shadowColor = '#5c3d2e';
+    title.shadowBlur = 0;
+    title.shadowOffsetX = 3;
+    title.shadowOffsetY = 3;
+    title.top = '-44%';
+    title.verticalAlignment = Control.VERTICAL_ALIGNMENT_CENTER;
+    gui.addControl(title);
 
-    // Stars total badge
-    this.add.text(W / 2, H * 0.15, `Total Stars: ${totalStars} ⭐`, {
-      fontFamily: 'Orbitron', fontSize: '18px', color: '#ffe45e'
-    }).setOrigin(0.5);
+    // Stars badge
+    const starsBadge = new TextBlock();
+    starsBadge.text = `Total Stars: ${totalStars} ⭐`;
+    starsBadge.color = '#d35400';
+    starsBadge.fontSize = 20;
+    starsBadge.fontStyle = 'bold';
+    starsBadge.fontFamily = 'Fredoka, sans-serif';
+    starsBadge.top = '-37%';
+    starsBadge.verticalAlignment = Control.VERTICAL_ALIGNMENT_CENTER;
+    gui.addControl(starsBadge);
 
-    // Grid details
-    const columns = W > 580 ? 2 : 1;
-    const cardW = columns === 2 ? Math.min(W * 0.44, 380) : Math.min(W * 0.82, 420);
-    const cardH = columns === 2 ? Math.min(H * 0.20, 115) : Math.min(H * 0.10, 76);
-    const startY = H * 0.23;
-    const gapX = cardW + 16;
-    const gapY = cardH + 14;
+    // World cards in a vertical list
+    const panel = new StackPanel();
+    panel.isVertical = true;
+    panel.top = '4%';
+    panel.width = '360px';
+    panel.verticalAlignment = Control.VERTICAL_ALIGNMENT_CENTER;
+    gui.addControl(panel);
 
     WORLDS.forEach((world, i) => {
-      let cx = W / 2;
-      let cy = startY + i * gapY;
-      if (columns === 2) {
-        const col = i % 2;
-        const row = Math.floor(i / 2);
-        cx = W / 2 + (col - 0.5) * gapX;
-        cy = startY + row * gapY;
-      }
       const unlocked = totalStars >= world.starsNeeded;
-      this.createWorldCard(cx, cy, cardW, cardH, world, unlocked, i * 90);
-    });
+      const col = intToHex(hslToInt(world.hue, unlocked ? 80 : 15, unlocked ? 40 : 20));
+      const borderCol = intToHex(hslToInt(world.hue, unlocked ? 90 : 20, unlocked ? 22 : 12));
 
-    // Back button
-    createCartoonButton(this, 75, 38, 100, 42, '◀ Back', () => {
-      audio.playTap();
-      this.cameras.main.fadeOut(300, 10, 0, 26);
-      this.time.delayedCall(320, () => this.scene.start('Menu'));
-    }, { bgColor: 0x9b72ff, fontSize: 16 });
-  }
+      const card = new Rectangle();
+      card.width = '340px'; card.height = '64px';
+      card.background = col; card.color = borderCol;
+      card.cornerRadius = 20; card.thickness = 3;
+      card.paddingBottom = '10px';
+      card.shadowColor = borderCol;
+      card.shadowBlur = 0;
+      card.shadowOffsetX = 0;
+      card.shadowOffsetY = 4;
+      card.alpha = 0;
+      panel.addControl(card);
 
-  private createWorldCard(
-    x: number, y: number, w: number, h: number,
-    world: typeof WORLDS[0], unlocked: boolean, delay: number
-  ) {
-    const col  = hslToInt(world.hue, 80, 55);
-    const dark = hslToInt(world.hue, 70, 28);
-    const glow = hslToInt(world.hue, 100, 75);
+      const cardTxt = new TextBlock();
+      cardTxt.text = unlocked
+        ? `${world.emoji} ${world.name}  —  ${world.desc}`
+        : `🔒 ${world.name}  (Need ${world.starsNeeded} ⭐)`;
+      cardTxt.color = unlocked ? '#ffffff' : '#9999aa';
+      cardTxt.fontSize = 15;
+      cardTxt.fontStyle = 'bold';
+      cardTxt.fontFamily = 'Fredoka, sans-serif';
+      card.addControl(cardTxt);
 
-    // Create container offset by 6 vertically for the entrance animation
-    const container = this.add.container(x, y + 6).setAlpha(0).setDepth(1);
+      TweenManager.add({ targets: card, alpha: 1, duration: 400, delay: 200 + i * 80 });
 
-    const g = this.add.graphics();
-    const draw = (hover: boolean) => {
-      g.clear();
-      // Card shadow
-      g.fillStyle(dark, 0.4);
-      g.fillRoundedRect(-w / 2 + 4, -h / 2 + 6, w, h, 16);
-      // Card bg
-      g.fillStyle(unlocked ? (hover ? col : hslToInt(world.hue, 70, 32)) : 0x221133, 1);
-      g.fillRoundedRect(-w / 2, -h / 2, w, h, 16);
-      // Glow border
-      for (let pass = 0; pass < 3; pass++) {
-        g.lineStyle([5, 3, 1.5][pass], unlocked ? glow : 0x443355, [0.1, 0.3, unlocked ? 0.7 : 0.3][pass]);
-        g.strokeRoundedRect(-w / 2, -h / 2, w, h, 16);
-      }
-      // Lock icon bg
-      if (!unlocked) {
-        g.fillStyle(0x000000, 0.3);
-        g.fillRoundedRect(-w / 2, -h / 2, w, h, 16);
-      }
-    };
-    draw(false);
-
-    const isSmall = h < 90;
-    const emojiSize = isSmall ? '28px' : '40px';
-    const titleSize = isSmall ? '18px' : '22px';
-    const descSize = isSmall ? '12px' : '14px';
-
-    const emojiX = -w / 2 + (isSmall ? 28 : 42);
-    const textX = -w / 2 + (isSmall ? 60 : 92);
-    const textYOffset = isSmall ? 8 : 14;
-
-    // Emoji icon
-    const emoji = this.add.text(emojiX, 0, world.emoji, { fontSize: emojiSize })
-      .setOrigin(0.5);
-
-    // World name
-    const nameText = this.add.text(textX, -textYOffset, world.name, {
-      fontFamily: 'Orbitron', fontSize: titleSize,
-      color: unlocked ? '#ffffff' : '#664477',
-      shadow: unlocked ? { offsetX: 0, offsetY: 2, color: '#000', blur: 6, fill: true } : undefined
-    }).setOrigin(0, 0.5);
-
-    // Description / lock notice
-    const descText = this.add.text(textX, textYOffset, unlocked ? world.desc : `🔒 Need ${world.starsNeeded} Stars`, {
-      fontFamily: 'Orbitron', fontSize: descSize,
-      color: unlocked ? '#ccbbee' : '#664477'
-    }).setOrigin(0, 0.5);
-
-    // Level stars row
-    const starTexts: Phaser.GameObjects.Text[] = [];
-    if (unlocked && !isSmall) {
-      for (let l = 1; l <= 5; l++) {
-        const stars = GameData.starsFor(world.id, l);
-        const sx = -w / 2 + 92 + (l - 1) * 22;
-        const sy = h / 2 - 14;
-        const starChar = stars >= 3 ? '⭐' : stars >= 2 ? '🌟' : stars >= 1 ? '✨' : '○';
-        const st = this.add.text(sx, sy, starChar, { fontSize: '11px' }).setOrigin(0.5);
-        starTexts.push(st);
-      }
-    }
-
-    container.add([g, emoji, nameText, descText, ...starTexts]);
-
-    if (unlocked) {
-      container.setSize(w, h).setInteractive({
-        hitArea: new Phaser.Geom.Rectangle(-w / 2, -h / 2, w, h),
-        hitAreaCallback: Phaser.Geom.Rectangle.Contains,
-        useHandCursor: true
-      });
-      
-      container.on('pointerover', () => {
-        draw(true);
-        this.tweens.add({
-          targets: container,
-          scale: 1.04,
-          duration: 150,
-          ease: 'Quad.easeOut',
-          overwrite: true
-        });
-      });
-      container.on('pointerout',  () => {
-        draw(false);
-        this.tweens.add({
-          targets: container,
-          scale: 1.0,
-          duration: 150,
-          ease: 'Quad.easeOut',
-          overwrite: true
-        });
-      });
-      container.on('pointerdown', () => {
-        audio.playTap();
-        this.cameras.main.fadeOut(300, 10, 0, 26);
-        this.time.delayedCall(320, () => {
+      if (unlocked) {
+        card.onPointerEnterObservable.add(() => { card.scaleX = 1.03; card.scaleY = 1.03; card.shadowOffsetY = 5; });
+        card.onPointerOutObservable.add(() => { card.scaleX = 1.0; card.scaleY = 1.0; card.shadowOffsetY = 4; });
+        card.onPointerClickObservable.add(() => {
+          audio.playTap();
           GameData.world.set(world.id);
-          this.scene.start('LevelSelect', { world: world.id });
+          SceneManager.start('LevelSelect', { world: world.id });
         });
-      });
-    }
-
-    // Entrance animation
-    this.tweens.add({
-      targets: container,
-      alpha: 1,
-      y: y,
-      duration: 500,
-      ease: 'Back.Out',
-      delay
+      }
     });
 
-    // Idle float
-    if (unlocked) {
-      this.tweens.add({
-        targets: container,
-        y: y - 4,
-        duration: 1800 + delay,
-        yoyo: true,
-        repeat: -1,
-        ease: 'Sine.InOut',
-        delay: 900 + delay
-      });
-    }
-  }
-
-  private addStarfield(W: number, H: number) {
-    const gfx = this.add.graphics();
-    for (let i = 0; i < 80; i++) {
-      gfx.fillStyle(0xffffff, 0.3 + Math.random() * 0.5);
-      gfx.fillCircle(Math.random() * W, Math.random() * H, Math.random() * 1.2 + 0.3);
-    }
+    // Back button (pink cartoon design)
+    const backBtn = Button.CreateSimpleButton('btn_back', '← Back');
+    backBtn.width = '160px'; backBtn.height = '48px';
+    backBtn.color = '#ffffff'; backBtn.fontSize = 20;
+    backBtn.fontStyle = 'bold';
+    backBtn.fontFamily = 'Fredoka, sans-serif';
+    backBtn.background = '#e91e63';
+    backBtn.color = '#ffffff';
+    (backBtn as any).color = '#c2185b'; // border color
+    backBtn.cornerRadius = 20; backBtn.thickness = 3;
+    backBtn.shadowColor = '#c2185b';
+    backBtn.shadowBlur = 0;
+    backBtn.shadowOffsetX = 0;
+    backBtn.shadowOffsetY = 4;
+    backBtn.top = '46%';
+    backBtn.verticalAlignment = Control.VERTICAL_ALIGNMENT_CENTER;
+    backBtn.alpha = 0;
+    gui.addControl(backBtn);
+    TweenManager.add({ targets: backBtn, alpha: 1, duration: 400, delay: 700 });
+    backBtn.onPointerUpObservable.add(() => {
+      audio.playTap();
+      SceneManager.start('Menu');
+    });
   }
 }
