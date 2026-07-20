@@ -17,6 +17,7 @@ export interface BuddyBlock extends BlockConfig {
   skin?: string;
   face?: string;
   colorOverride?: string;
+  faceSide?: 'X' | 'Z';
 }
 
 export type GameScreen = 'menu' | 'world_select' | 'level_select' | 'gameplay';
@@ -285,14 +286,14 @@ export const useGameStore = create<GameState>((set, get) => ({
       }
 
       const blockConfigs = [
-        { id: 'b_wizard', x: 0, y: 0, z: 3, dir: { x: 0, y: 0, z: -1 }, type: 'normal' as const, skin: 'wizard', face: 'happy' },
-        { id: 'b_sprout', x: 2, y: 0, z: 1, dir: { x: -1, y: 0, z: 0 }, type: 'normal' as const, skin: 'sprout', face: 'wink' },
-        { id: 'b_crown', x: 3, y: 0, z: 2, dir: { x: 0, y: 0, z: 1 }, type: 'normal' as const, skin: 'crown', face: 'happy' },
-        { id: 'b_sleep', x: 6, y: 0, z: 2, dir: { x: 0, y: 0, z: -1 }, type: 'normal' as const, skin: 'sleep', face: 'sleep' },
-        { id: 'b_red', x: 1, y: 0, z: 5, dir: { x: 1, y: 0, z: 0 }, type: 'normal' as const, skin: 'none', face: 'screaming', colorOverride: '#ff3b3b' },
-        { id: 'b_lightblue', x: 4, y: 0, z: 4, dir: { x: 0, y: 0, z: 1 }, type: 'normal' as const, skin: 'none', face: 'worried', colorOverride: '#00d5ff' },
-        { id: 'b_pink', x: 2, y: 0, z: 6, dir: { x: 0, y: 0, z: -1 }, type: 'normal' as const, skin: 'flower', face: 'happy', colorOverride: '#ff69b4' },
-        { id: 'b_orange', x: 6, y: 0, z: 5, dir: { x: 0, y: 0, z: -1 }, type: 'normal' as const, skin: 'none', face: 'happy', colorOverride: '#ffaa00' }
+        { id: 'b_wizard', x: 0, y: 0, z: 3, dir: { x: -1, y: 0, z: 0 }, type: 'normal' as const, skin: 'wizard', face: 'happy', faceSide: 'X' as const, colorOverride: '#2b82f6' },
+        { id: 'b_sprout', x: 2, y: 0, z: 1, dir: { x: -1, y: 0, z: 0 }, type: 'normal' as const, skin: 'sprout', face: 'wink', faceSide: 'Z' as const, colorOverride: '#7ae13b' },
+        { id: 'b_crown', x: 3, y: 0, z: 2, dir: { x: 0, y: 0, z: 1 }, type: 'normal' as const, skin: 'crown', face: 'happy', faceSide: 'Z' as const, colorOverride: '#ffd000' },
+        { id: 'b_sleep', x: 6, y: 0, z: 2, dir: { x: 1, y: 0, z: 0 }, type: 'normal' as const, skin: 'sleep', face: 'sleep', faceSide: 'X' as const, colorOverride: '#a258ff' },
+        { id: 'b_red', x: 1, y: 0, z: 5, dir: { x: 0, y: 0, z: 1 }, type: 'normal' as const, skin: 'none', face: 'screaming', colorOverride: '#ff3b3b', faceSide: 'Z' as const },
+        { id: 'b_lightblue', x: 4, y: 0, z: 4, dir: { x: -1, y: 0, z: 0 }, type: 'normal' as const, skin: 'none', face: 'worried', colorOverride: '#22d3ee', faceSide: 'X' as const },
+        { id: 'b_pink', x: 2, y: 0, z: 6, dir: { x: 0, y: 0, z: 1 }, type: 'normal' as const, skin: 'flower', face: 'happy', colorOverride: '#ff5ea7', faceSide: 'X' as const },
+        { id: 'b_orange', x: 6, y: 0, z: 5, dir: { x: -1, y: 0, z: 0 }, type: 'normal' as const, skin: 'none', face: 'happy', colorOverride: '#ffaa00', faceSide: 'Z' as const }
       ];
 
       buddies = blockConfigs.map(cfg => ({

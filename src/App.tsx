@@ -17,34 +17,40 @@ import { Buddy3DBlock } from './components/Buddy3DBlock';
 import { motion, AnimatePresence } from 'framer-motion';
 
 // --- Simplified Canvas for Single Floating Buddy in Main Menu ---
-const Menu3DCharacter: React.FC = () => {
+export const Menu3DCharacter: React.FC = () => {
 
-  // Create a mock BuddyBlock config to pass to Buddy3DBlock
   const mockBuddy = {
     id: 'menu_buddy',
     x: 0,
     y: 0,
     z: 0,
-    dir: { x: 0, y: 0, z: 1 },
+    dir: { x: 0, y: 0, z: -1 }, // face on +Z so it looks toward the camera
     type: 'normal' as const,
     state: 'idle' as const,
     animT: 0,
-    jellyScale: [1.6, 1.6, 1.6] as [number, number, number], // larger menu scale
+    jellyScale: [1.0, 1.0, 1.0] as [number, number, number],
     jellyOffset: [0, 0, 0] as [number, number, number],
     blinkTimer: 2,
     isBlinking: false,
-    rainbowHue: 0
+    rainbowHue: 0,
+    colorOverride: '#D4906A', // warm peach/salmon matching mockup pixel-perfect
+    face: 'happy',
+    skin: 'none'
   };
 
   return (
-    <div style={{ position: 'absolute', inset: 0, width: '100%', height: '52%', pointerEvents: 'auto', zIndex: 2 }}>
-      <Canvas camera={{ position: [0, 0.8, 3.2], fov: 40 }} gl={{ alpha: true }}>
-        <ambientLight intensity={0.9} />
-        <directionalLight position={[2, 6, 2]} intensity={1.5} />
+    // Inline block — participates in MainMenu flex flow
+    <div style={{ width: '100%', height: '200px', flexShrink: 0, position: 'relative', zIndex: 2 }}>
+      <Canvas camera={{ position: [0, 0.4, 2.6], fov: 36 }} gl={{ alpha: true }}
+        style={{ width: '100%', height: '100%' }}>
+        <ambientLight intensity={1.1} />
+        <directionalLight position={[2, 6, 2]} intensity={1.6} />
+        <directionalLight position={[-2, 3, -1]} intensity={0.4} color="#ffccee" />
         <Environment preset="sunset" />
         
-        <Float speed={2.5} rotationIntensity={0.2} floatIntensity={0.4}>
-          <group rotation={[0, -0.4, 0]}>
+        <Float speed={2.0} rotationIntensity={0.12} floatIntensity={0.3}>
+          {/* Rotate slightly left so the buddy appears to look to the left as in mockup */}
+          <group rotation={[0.08, -0.55, 0]}>
             <Buddy3DBlock buddy={mockBuddy} />
           </group>
         </Float>
@@ -71,12 +77,7 @@ export const App: React.FC = () => {
           </>
         );
       default:
-        return (
-          <>
-            <Menu3DCharacter />
-            <MainMenu />
-          </>
-        );
+        return <MainMenu />;
     }
   };
 

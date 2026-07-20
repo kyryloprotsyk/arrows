@@ -21,11 +21,13 @@ export const Buddy3DBlock: React.FC<Buddy3DBlockProps> = ({ buddy }) => {
   const [eyeScaleY, setEyeScaleY] = useState(1);
   const [blinkTimer, setBlinkTimer] = useState(2 + Math.random() * 3);
 
-  // Dynamically generate face texture via Canvas 2D
+  // Dynamically generate face texture and top arrow texture via Canvas 2D
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const textureRef = useRef<THREE.CanvasTexture | null>(null);
+  const arrowCanvasRef = useRef<HTMLCanvasElement | null>(null);
+  const arrowTextureRef = useRef<THREE.CanvasTexture | null>(null);
 
-  // Setup texture once on mount
+  // Setup textures once on mount
   useEffect(() => {
     const canvas = document.createElement('canvas');
     canvas.width = 256;
@@ -38,8 +40,20 @@ export const Buddy3DBlock: React.FC<Buddy3DBlockProps> = ({ buddy }) => {
     tex.magFilter = THREE.LinearFilter;
     textureRef.current = tex;
 
+    const arrowCanvas = document.createElement('canvas');
+    arrowCanvas.width = 256;
+    arrowCanvas.height = 256;
+    arrowCanvasRef.current = arrowCanvas;
+
+    const arrowTex = new THREE.CanvasTexture(arrowCanvas);
+    arrowTex.colorSpace = THREE.SRGBColorSpace;
+    arrowTex.minFilter = THREE.LinearFilter;
+    arrowTex.magFilter = THREE.LinearFilter;
+    arrowTextureRef.current = arrowTex;
+
     return () => {
       tex.dispose();
+      arrowTex.dispose();
     };
   }, []);
 
@@ -53,41 +67,63 @@ export const Buddy3DBlock: React.FC<Buddy3DBlockProps> = ({ buddy }) => {
 
     ctx.clearRect(0, 0, 256, 256);
 
-    // 0. Draw direction arrow on the face
-    const drawFaceArrow = (dir: { x: number, y: number, z: number }) => {
-      ctx.save();
-      ctx.translate(128, 62); // Position near top-center of the face
-      
-      // Calculate rotation angle
-      let angle = 0;
-      if (dir.z < -0.5) angle = 0; // points right (up-right / -Z)
-      else if (dir.x < -0.5) angle = -Math.PI / 2; // points up (up-left / -X)
-      else if (dir.z > 0.5) angle = Math.PI; // points left (down-left / +Z)
-      else if (dir.x > 0.5) angle = Math.PI / 2; // points down (down-right / +X)
-      
-      ctx.rotate(angle);
-      
-      // Draw thick white arrow
-      ctx.fillStyle = '#ffffff';
-      ctx.beginPath();
-      // Arrow head
-      ctx.moveTo(22, 0);
-      ctx.lineTo(0, -22);
-      ctx.lineTo(-22, 0);
-      ctx.lineTo(-9, -2);
-      // Arrow stem
-      ctx.lineTo(-9, 18);
-      ctx.lineTo(9, 18);
-      ctx.lineTo(9, -2);
-      ctx.closePath();
-      ctx.fill();
-      ctx.restore();
-    };
-
-    // Draw the white arrow on the face for Level 24 or if customized
+    const useFrontLeft = buddy.dir.x < 0 || buddy.dir.z > 0;
+    const faceSide = buddy.faceSide || (useFrontLeft ? 'X' : 'Z');
     const isCustomLevel = selectedWorld === 3 && levelGridCoords.length === 64; // Level 24
-    if (isCustomLevel && buddy.type !== 'chest' && buddy.type !== 'portal') {
-      drawFaceArrow(buddy.dir);
+
+    // Draw the direction arrow on the top arrow canvas instead of the face
+    const arrowCanvas = arrowCanvasRef.current;
+    if (arrowCanvas) {
+      const arrowCtx = arrowCanvas.getContext('2d');
+      if (arrowCtx) {
+        arrowCtx.clearRect(0, 0, 256, 256);
+        if (isCustomLevel && buddy.type !== 'chest' && buddy.type !== 'portal') {
+          arrowCtx.save();
+          arrowCtx.translate(128, 128); // Center of the side face
+          
+          // Calculate movement direction relative to the Y-rotated body group
+          const bodyRotationY = faceSide === 'X' ? Math.PI / 2 : 0;
+          const localDir = new THREE.Vector3(buddy.dir.x, buddy.dir.y, buddy.dir.z)
+            .applyAxisAngle(new THREE.Vector3(0, 1, 0), -bodyRotationY);
+          
+          let angle = 0;
+          const ldx = localDir.x;
+          const ldz = localDir.z;
+          
+          // Since the arrow is always printed on the local +X side face:
+          if (ldx < -0.5) angle = 0;          // moves up-left (-X local) -> points UP
+          else if (ldx > 0.5) angle = Math.PI; // moves down-right (+X local) -> points DOWN
+          else if (ldz < -0.5) angle = Math.PI / 2; // moves up-right (-Z local) -> points RIGHT
+          else if (ldz > 0.5) angle = -Math.PI / 2; // moves down-left (+Z local) -> points LEFT
+          
+          arrowCtx.rotate(angle);
+          
+          // Draw thick white arrow centrally with a dark stroke outline for maximum visibility
+          arrowCtx.beginPath();
+          // Larger, thicker arrow matching mockup
+          arrowCtx.moveTo(34, -10);
+          arrowCtx.lineTo(0, -44);
+          arrowCtx.lineTo(-34, -10);
+          arrowCtx.lineTo(-15, -12);
+          // Arrow stem
+          arrowCtx.lineTo(-15, 40);
+          arrowCtx.lineTo(15, 40);
+          arrowCtx.lineTo(15, -12);
+          arrowCtx.closePath();
+          
+          // Thick dark outline
+          arrowCtx.strokeStyle = 'rgba(0, 0, 0, 0.5)';
+          arrowCtx.lineWidth = 10;
+          arrowCtx.lineJoin = 'round';
+          arrowCtx.stroke();
+          
+          // White fill
+          arrowCtx.fillStyle = '#ffffff';
+          arrowCtx.fill();
+          
+          arrowCtx.restore();
+        }
+      }
     }
 
     // 1. Soft radial-gradient blushing cheeks
@@ -241,7 +277,10 @@ export const Buddy3DBlock: React.FC<Buddy3DBlockProps> = ({ buddy }) => {
     if (textureRef.current) {
       textureRef.current.needsUpdate = true;
     }
-  }, [buddy.state, eyeScaleY, buddy.face]);
+    if (arrowTextureRef.current) {
+      arrowTextureRef.current.needsUpdate = true;
+    }
+  }, [buddy.state, eyeScaleY, buddy.face, buddy.dir, buddy.faceSide]);
 
   // Animate eye blinking
   useFrame((state, delta) => {
@@ -330,10 +369,14 @@ export const Buddy3DBlock: React.FC<Buddy3DBlockProps> = ({ buddy }) => {
   };
 
   // Decide face position and rotation:
-  // If the block is moving to the left/up-left, face is on +X. Otherwise on +Z.
+  // Since the body group is rotated to orient the face, the face is always on the local +Z side.
   const useFrontLeft = buddy.dir.x < 0 || buddy.dir.z > 0;
-  const facePosition: [number, number, number] = useFrontLeft ? [0.456, 0.05, 0] : [0, 0.05, 0.456];
-  const faceRotation: [number, number, number] = useFrontLeft ? [0, Math.PI / 2, 0] : [0, 0, 0];
+  const faceSide = buddy.faceSide || (useFrontLeft ? 'X' : 'Z');
+  const bodyRotationY = faceSide === 'X' ? Math.PI / 2 : 0;
+
+  // Position face and decals relative to the new bulkier 0.96 size cube
+  const facePosition: [number, number, number] = [0, 0, 0.485];
+  const faceRotation: [number, number, number] = [0, 0, 0];
 
   const blockSkin = buddy.skin || (buddy.id !== 'menu_buddy' ? activeSkin : 'none');
   const isCustomLevel = selectedWorld === 3 && levelGridCoords.length === 64; // Level 24
@@ -345,41 +388,69 @@ export const Buddy3DBlock: React.FC<Buddy3DBlockProps> = ({ buddy }) => {
       scale={scale}
       onClick={handlePointerDown}
     >
-      {/* Visual Offset anchor for wiggles */}
-      <group position={offset}>
-        {/* Core Buddy Cube */}
-        <RoundedBox args={[0.9, 0.9, 0.9]} radius={0.12} smoothness={5} castShadow receiveShadow>
+      {/* Visual Offset anchor for wiggles with Y-axis orientation */}
+      <group position={offset} rotation={[0, bodyRotationY, 0]}>
+        {/* Core Buddy Cube: 0.96 size and 0.16 radius for a bulkier, softer, premium squishy toy look */}
+        <RoundedBox args={[0.96, 0.96, 0.96]} radius={0.16} smoothness={5} castShadow receiveShadow>
           <meshPhysicalMaterial
             color={blockColor}
-            roughness={roughness}
-            clearcoat={clearcoat}
-            clearcoatRoughness={0.1}
+            roughness={0.12}
+            clearcoat={1.0}
+            clearcoatRoughness={0.08}
             transmission={transmission}
             opacity={opacity}
             transparent={transmission > 0}
-            metalness={selectedWorld === 3 ? 0.8 : 0.05} // Cyber cyber metal look
+            metalness={isCustomLevel ? 0.05 : (selectedWorld === 3 ? 0.8 : 0.05)} // Bright toy shaders for Level 24
             reflectivity={0.9}
+            emissive={blockColor}
+            emissiveIntensity={0.15} // Subtle emissive glow to make the colors bright and pop
           />
         </RoundedBox>
 
         {/* Cute stubby legs/feet at bottom corners */}
         {buddy.type !== 'portal' && (
-          <group position={[0, -0.45, 0]}>
-            <mesh position={[-0.3, -0.06, -0.3]}>
-              <cylinderGeometry args={[0.08, 0.08, 0.12, 8]} />
-              <meshPhysicalMaterial color={blockColor} roughness={roughness} clearcoat={clearcoat} />
+          <group position={[0, -0.48, 0]}>
+            <mesh position={[-0.32, -0.06, -0.32]}>
+              <cylinderGeometry args={[0.085, 0.085, 0.12, 8]} />
+              <meshPhysicalMaterial color={blockColor} roughness={roughness} clearcoat={clearcoat} emissive={blockColor} emissiveIntensity={0.1} />
             </mesh>
-            <mesh position={[0.3, -0.06, -0.3]}>
-              <cylinderGeometry args={[0.08, 0.08, 0.12, 8]} />
-              <meshPhysicalMaterial color={blockColor} roughness={roughness} clearcoat={clearcoat} />
+            <mesh position={[0.32, -0.06, -0.32]}>
+              <cylinderGeometry args={[0.085, 0.085, 0.12, 8]} />
+              <meshPhysicalMaterial color={blockColor} roughness={roughness} clearcoat={clearcoat} emissive={blockColor} emissiveIntensity={0.1} />
             </mesh>
-            <mesh position={[-0.3, -0.06, 0.3]}>
-              <cylinderGeometry args={[0.08, 0.08, 0.12, 8]} />
-              <meshPhysicalMaterial color={blockColor} roughness={roughness} clearcoat={clearcoat} />
+            <mesh position={[-0.32, -0.06, 0.32]}>
+              <cylinderGeometry args={[0.085, 0.085, 0.12, 8]} />
+              <meshPhysicalMaterial color={blockColor} roughness={roughness} clearcoat={clearcoat} emissive={blockColor} emissiveIntensity={0.1} />
             </mesh>
-            <mesh position={[0.3, -0.06, 0.3]}>
-              <cylinderGeometry args={[0.08, 0.08, 0.12, 8]} />
-              <meshPhysicalMaterial color={blockColor} roughness={roughness} clearcoat={clearcoat} />
+            <mesh position={[0.32, -0.06, 0.32]}>
+              <cylinderGeometry args={[0.085, 0.085, 0.12, 8]} />
+              <meshPhysicalMaterial color={blockColor} roughness={roughness} clearcoat={clearcoat} emissive={blockColor} emissiveIntensity={0.1} />
+            </mesh>
+          </group>
+        )}
+
+        {/* Stubby arms / hands sticking out left and right — at mid-body height */}
+        {buddy.type !== 'portal' && (
+          <group position={[0, -0.06, 0]}>
+            {/* Left arm — extends -X */}
+            <mesh position={[-0.58, 0, 0]} rotation={[0, 0, Math.PI / 2]}>
+              <cylinderGeometry args={[0.075, 0.07, 0.2, 10]} />
+              <meshPhysicalMaterial color={blockColor} roughness={roughness} clearcoat={clearcoat} emissive={blockColor} emissiveIntensity={0.1} />
+            </mesh>
+            {/* Left hand — small oval mitten pad, slightly tilted down */}
+            <mesh position={[-0.72, -0.04, 0.01]} rotation={[0.3, 0, -0.3]}>
+              <sphereGeometry args={[0.1, 10, 8]} />
+              <meshPhysicalMaterial color={blockColor} roughness={roughness} clearcoat={clearcoat} emissive={blockColor} emissiveIntensity={0.1} />
+            </mesh>
+            {/* Right arm — extends +X */}
+            <mesh position={[0.58, 0, 0]} rotation={[0, 0, Math.PI / 2]}>
+              <cylinderGeometry args={[0.075, 0.07, 0.2, 10]} />
+              <meshPhysicalMaterial color={blockColor} roughness={roughness} clearcoat={clearcoat} emissive={blockColor} emissiveIntensity={0.1} />
+            </mesh>
+            {/* Right hand — small oval mitten pad, slightly tilted down */}
+            <mesh position={[0.72, -0.04, 0.01]} rotation={[0.3, 0, 0.3]}>
+              <sphereGeometry args={[0.1, 10, 8]} />
+              <meshPhysicalMaterial color={blockColor} roughness={roughness} clearcoat={clearcoat} emissive={blockColor} emissiveIntensity={0.1} />
             </mesh>
           </group>
         )}
@@ -389,6 +460,14 @@ export const Buddy3DBlock: React.FC<Buddy3DBlockProps> = ({ buddy }) => {
           <mesh position={facePosition} rotation={faceRotation}>
             <planeGeometry args={[0.82, 0.82]} />
             <meshBasicMaterial map={textureRef.current} transparent depthWrite={false} />
+          </mesh>
+        )}
+
+        {/* --- DYNAMIC CANVAS SIDE ARROW TEXTURE --- */}
+        {buddy.type !== 'chest' && buddy.type !== 'portal' && isCustomLevel && arrowTextureRef.current && (
+          <mesh position={[0.485, 0, 0]} rotation={[0, Math.PI / 2, 0]}>
+            <planeGeometry args={[0.82, 0.82]} />
+            <meshBasicMaterial map={arrowTextureRef.current} transparent depthWrite={false} />
           </mesh>
         )}
 
@@ -506,8 +585,8 @@ export const Buddy3DBlock: React.FC<Buddy3DBlockProps> = ({ buddy }) => {
                   <sphereGeometry args={[0.045]} />
                   <meshBasicMaterial color="#fbbf24" />
                 </mesh>
-                {/* Wizard Wand in left hand */}
-                <group position={[-0.52, -0.3, 0.28]} rotation={[0.2, 0.1, -0.45]}>
+                {/* Wizard Wand in right hand */}
+                <group position={[0.545, -0.22, 0.08]} rotation={[0.2, -0.1, 0.45]}>
                   <mesh>
                     <cylinderGeometry args={[0.015, 0.015, 0.36]} />
                     <meshStandardMaterial color="#854d0e" roughness={0.7} />

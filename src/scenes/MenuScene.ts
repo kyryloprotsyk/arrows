@@ -58,12 +58,12 @@ export class MenuScene extends Phaser.Scene {
     const skins = ['none', 'wizard', 'crown', 'cat', 'tophat', 'chef', 'propeller', 'rainbow'];
     this.buddySkin = skins[Math.floor(Math.random() * skins.length)];
     this.buddyX = W / 2;
-    this.buddyY = this.buddyBaseY = H * 0.40; // Positioned in upper middle as in mockup
+    this.buddyY = this.buddyBaseY = H * 0.385; // Upper-middle as in mockup
     this.buddyState = 'idle';
     this.buddyAnimT = 0;
 
     // Interactive zone for giant buddy
-    const buddyZone = this.add.zone(W / 2, H * 0.40, 160, 160)
+    const buddyZone = this.add.zone(W / 2, H * 0.385, 120, 120)
       .setInteractive({ useHandCursor: true });
     buddyZone.on('pointerdown', () => {
       this.triggerBuddyWiggle();
@@ -579,7 +579,7 @@ export class MenuScene extends Phaser.Scene {
     const g = this.blockGfx;
     const cx = this.buddyX;
     const cy = this.buddyY;
-    const s = 1.75;
+    const s = 1.1;  // Smaller — matches mockup proportions
     const tw = TILE_W * s;
     const th = TILE_H * s;
     const bh = BLOCK_H * s;
@@ -631,18 +631,24 @@ export class MenuScene extends Phaser.Scene {
     g.lineStyle(14 * scaleX, 0xffb896, 1.0);
     g.beginPath(); g.moveTo(rl1.x, rl1.y); g.lineTo(rl2.x, rl2.y); g.strokePath();
 
-    // Draw transformed stubby side arms
+    // Draw transformed stubby side arms with visible round hand tips
     // Left arm
-    const la1 = tPt(cx - 38, cy + 14);
-    const la2 = tPt(cx - 50, cy + 24);
-    g.lineStyle(16 * scaleX, 0xffb896, 1.0);
+    const la1 = tPt(cx - 36, cy + 10);
+    const la2 = tPt(cx - 50, cy + 22);
+    g.lineStyle(13 * scaleX, 0xffb896, 1.0);
     g.beginPath(); g.moveTo(la1.x, la1.y); g.lineTo(la2.x, la2.y); g.strokePath();
+    // Left hand round cap
+    g.fillStyle(0xffb896, 1.0);
+    g.fillCircle(la2.x, la2.y, 8 * scaleX);
 
     // Right arm
-    const ra1 = tPt(cx + 38, cy + 14);
-    const ra2 = tPt(cx + 50, cy + 24);
-    g.lineStyle(16 * scaleX, 0xffb896, 1.0);
+    const ra1 = tPt(cx + 36, cy + 10);
+    const ra2 = tPt(cx + 50, cy + 22);
+    g.lineStyle(13 * scaleX, 0xffb896, 1.0);
     g.beginPath(); g.moveTo(ra1.x, ra1.y); g.lineTo(ra2.x, ra2.y); g.strokePath();
+    // Right hand round cap
+    g.fillStyle(0xffb896, 1.0);
+    g.fillCircle(ra2.x, ra2.y, 8 * scaleX);
 
     // Draw main isometric cube body
     drawIsoCube(g, cx, cy, topCol, leftCol, rightCol, glowCol, 0.72, giantTransformer, 1, this.time.now);

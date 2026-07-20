@@ -187,6 +187,181 @@ html, body {
   -webkit-text-stroke: 1.5px var(--color-cyan-dark);
 }
 
+/* ── Main Menu Layout ──────────────────────────────────────────────────── */
+.menu-screen {
+  background:
+    radial-gradient(ellipse at 30% 20%, rgba(180, 60, 255, 0.35) 0%, transparent 55%),
+    radial-gradient(ellipse at 70% 60%, rgba(100, 40, 200, 0.25) 0%, transparent 55%),
+    radial-gradient(ellipse at 50% 100%, rgba(255, 50, 150, 0.15) 0%, transparent 50%),
+    #0a0015;
+  justify-content: flex-start;
+  align-items: center;
+  padding: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+
+/* Twinkling star dots in menu background */
+.menu-screen::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background-image:
+    radial-gradient(1px 1px at 15% 18%, rgba(255,255,255,0.9) 0%, transparent 100%),
+    radial-gradient(1px 1px at 80% 12%, rgba(255,255,255,0.7) 0%, transparent 100%),
+    radial-gradient(1.5px 1.5px at 45% 30%, rgba(255,255,255,0.6) 0%, transparent 100%),
+    radial-gradient(1px 1px at 90% 45%, rgba(100,200,255,0.8) 0%, transparent 100%),
+    radial-gradient(1px 1px at 25% 65%, rgba(255,255,255,0.5) 0%, transparent 100%),
+    radial-gradient(1.5px 1.5px at 65% 80%, rgba(200,150,255,0.7) 0%, transparent 100%),
+    radial-gradient(1px 1px at 10% 90%, rgba(255,255,255,0.4) 0%, transparent 100%),
+    radial-gradient(1px 1px at 55% 5%, rgba(255,200,255,0.7) 0%, transparent 100%),
+    radial-gradient(2px 2px at 35% 48%, rgba(150,220,255,0.6) 0%, transparent 100%),
+    radial-gradient(1px 1px at 75% 70%, rgba(255,255,255,0.5) 0%, transparent 100%);
+  pointer-events: none;
+  z-index: 0;
+}
+
+.menu-top-row {
+  position: relative;
+  z-index: 10;
+  width: 100%;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 16px 20px 0;
+  flex-shrink: 0;
+}
+
+/* Icon corner buttons (profile & sound) */
+.menu-icon-btn {
+  width: 52px;
+  height: 52px;
+  border-radius: 16px;
+  border: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  position: relative;
+  color: white;
+  transition: all 0.2s;
+}
+
+.menu-icon-btn--profile {
+  background: rgba(160, 120, 220, 0.35);
+  border: 2px solid rgba(200, 160, 255, 0.4);
+  backdrop-filter: blur(10px);
+  box-shadow: 0 4px 12px rgba(0,0,0,0.3), inset 0 1px 2px rgba(255,255,255,0.15);
+}
+
+.menu-icon-btn--sound {
+  background: rgba(50, 50, 70, 0.7);
+  border: 2px solid rgba(100, 100, 130, 0.4);
+  backdrop-filter: blur(10px);
+  box-shadow: 0 4px 12px rgba(0,0,0,0.4), inset 0 1px 2px rgba(255,255,255,0.08);
+}
+
+.muted-x {
+  position: absolute;
+  top: 4px;
+  right: 6px;
+  font-size: 11px;
+  font-weight: 900;
+  color: #ff4444;
+  line-height: 1;
+}
+
+/* Hero area (where 3D buddy floats) */
+.menu-hero-space {
+  position: relative;
+  z-index: 1;
+  width: 100%;
+  flex: 1;
+  min-height: 240px;
+  max-height: 340px;
+}
+
+/* Title block */
+.menu-title-block {
+  position: relative;
+  z-index: 10;
+  text-align: center;
+  margin-bottom: 0;
+  line-height: 1;
+  padding: 0 16px;
+}
+
+.menu-title-line1 {
+  font-family: var(--font-bubbly);
+  font-weight: 700;
+  font-size: clamp(48px, 12vw, 64px);
+  color: #fff;
+  text-shadow:
+    0 0 6px #ff1f8e,
+    0 0 18px #ff1f8e,
+    0 0 45px #ff1f8e,
+    0 0 90px rgba(255, 31, 142, 0.4);
+  -webkit-text-stroke: 1.5px hsl(335, 100%, 40%);
+  line-height: 0.95;
+  margin-bottom: 2px;
+}
+
+.menu-title-line2 {
+  font-family: var(--font-bubbly);
+  font-weight: 700;
+  font-size: clamp(38px, 9vw, 52px);
+  color: #fff;
+  text-shadow:
+    0 0 6px #ff1f8e,
+    0 0 18px #ff1f8e,
+    0 0 45px #ff1f8e,
+    0 0 90px rgba(255, 31, 142, 0.4);
+  -webkit-text-stroke: 1.5px hsl(335, 100%, 40%);
+  line-height: 1.1;
+}
+
+/* Buttons stack */
+.menu-buttons-stack {
+  position: relative;
+  z-index: 10;
+  width: 100%;
+  max-width: 320px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-bottom: 12px;
+  padding: 0 4px;
+}
+
+/* Coin row */
+.menu-coin-row {
+  position: relative;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 12px;
+  padding: 8px 20px;
+  background: rgba(255,255,255,0.06);
+  border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 40px;
+  backdrop-filter: blur(8px);
+}
+
+.menu-coin-icon {
+  font-size: 24px;
+  line-height: 1;
+  filter: drop-shadow(0 2px 4px rgba(255,200,0,0.4));
+}
+
+.menu-coin-count {
+  font-family: var(--font-bubbly);
+  font-size: 18px;
+  font-weight: 700;
+  color: #fff;
+  letter-spacing: 0.3px;
+}
+
 /* ── Glossy Gel 3D Buttons ────────────────────────────────────────────── */
 .btn-gel {
   display: flex;
@@ -199,8 +374,9 @@ html, body {
   text-transform: uppercase;
   color: #ffffff;
   border: none;
-  border-radius: 20px;
-  padding: 14px 28px;
+  border-radius: 50px;
+  padding: 13px 28px;
+  letter-spacing: 0.5px;
   cursor: pointer;
   position: relative;
   overflow: hidden;
