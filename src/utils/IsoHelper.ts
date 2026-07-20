@@ -957,9 +957,6 @@ export function createCartoonButton(
 ): Phaser.GameObjects.Container {
   const container = scene.add.container(x, y);
   container.setDepth(options?.depth ?? 21);
-  container.setSize(w, h);
-  
-  // Entire button area hit zone
   container.setInteractive(new Phaser.Geom.Rectangle(-w / 2, -h / 2, w, h), Phaser.Geom.Rectangle.Contains);
   container.input!.cursor = 'pointer';
 

@@ -1,29 +1,282 @@
-/* audio.ts — Web Audio API synthesizer (no external dependencies) */
+﻿/* audio.ts — Howler.js BGM (pre-rendered PCM loops) + Web Audio SFX synthesis
+ *
+ * BGM architecture:
+ *   Each world has 3 looping Howl layers: bass, melody, arp.
+ *   Loops are rendered offline at startup into WAV data URLs using
+ *   OfflineAudioContext (no audio files required). Howler manages
+ *   loop, fade, volume, and iOS AudioContext unlock automatically.
+ *
+ * SFX stay as pure Web Audio API synthesis — zero latency, per-world timbre.
+ */
+
+import { Howler, Howl } from 'howler';
+
+// ── World theme definitions ──────────────────────────────────────────────────
+
+interface WorldTheme {
+  bpm:        number;
+  bassNotes:   number[];
+  melodyNotes: number[];
+  arpNotes:    number[];
+  bassWave:    OscillatorType;
+  melodyWave:  OscillatorType;
+  arpWave:     OscillatorType;
+  bassGain:    number;
+  melodyGain:  number;
+  arpGain:     number;
+  reverb:      number;
+}
+
+const WORLD_THEMES: WorldTheme[] = [
+  // 0: Menu — C pentatonic, 118 BPM
+  { bpm: 118, bassNotes: [130.81,98.00,146.83,130.81], melodyNotes: [523.25,659.25,783.99,659.25,783.99,1046.50,880.00,659.25], arpNotes: [1046.50,1318.51,1567.98,1318.51,1046.50,880.00,1046.50,1318.51], bassWave:'sine', melodyWave:'triangle', arpWave:'sine', bassGain:0.28, melodyGain:0.18, arpGain:0.10, reverb:0.25 },
+  // 1: Jelly — C major, 138 BPM, bouncy
+  { bpm: 138, bassNotes: [130.81,130.81,164.81,174.61,196.00,164.81,174.61,130.81], melodyNotes: [523.25,659.25,783.99,880.00,1046.50,880.00,783.99,659.25], arpNotes: [1046.50,1318.51,1567.98,2093.00,1567.98,1318.51,1046.50,783.99], bassWave:'sine', melodyWave:'sine', arpWave:'sine', bassGain:0.30, melodyGain:0.22, arpGain:0.12, reverb:0.15 },
+  // 2: Wood — G minor, 110 BPM, warm triangle
+  { bpm: 110, bassNotes: [98.00,116.54,130.81,98.00,87.31,116.54,98.00,87.31], melodyNotes: [392.00,466.16,523.25,587.33,466.16,392.00,349.23,392.00], arpNotes: [783.99,932.33,1046.50,1174.66,932.33,783.99,698.46,783.99], bassWave:'triangle', melodyWave:'triangle', arpWave:'triangle', bassGain:0.28, melodyGain:0.20, arpGain:0.11, reverb:0.30 },
+  // 3: Iron — D minor, 132 BPM, mechanical sawtooth
+  { bpm: 132, bassNotes: [146.83,174.61,196.00,146.83,130.81,174.61,146.83,123.47], melodyNotes: [587.33,698.46,783.99,880.00,783.99,698.46,587.33,523.25], arpNotes: [1174.66,1396.91,1567.98,1760.00,1567.98,1396.91,1174.66,1046.50], bassWave:'sawtooth', melodyWave:'sawtooth', arpWave:'square', bassGain:0.22, melodyGain:0.16, arpGain:0.09, reverb:0.10 },
+  // 4: Water — F major, 100 BPM, flowing sine
+  { bpm: 100, bassNotes: [174.61,130.81,146.83,174.61,196.00,174.61,146.83,130.81], melodyNotes: [698.46,783.99,880.00,1046.50,880.00,783.99,698.46,659.25], arpNotes: [1396.91,1567.98,1760.00,2093.00,1760.00,1567.98,1396.91,1318.51], bassWave:'sine', melodyWave:'sine', arpWave:'sine', bassGain:0.26, melodyGain:0.20, arpGain:0.12, reverb:0.45 },
+  // 5: Ice — A minor, 92 BPM, crystalline high sine
+  { bpm: 92, bassNotes: [110.00,130.81,146.83,110.00,98.00,130.81,110.00,98.00], melodyNotes: [880.00,1046.50,1174.66,1318.51,1174.66,1046.50,880.00,783.99], arpNotes: [1760.00,2093.00,2349.32,2637.02,2349.32,2093.00,1760.00,1567.98], bassWave:'sine', melodyWave:'sine', arpWave:'sine', bassGain:0.22, melodyGain:0.16, arpGain:0.10, reverb:0.55 },
+  // 6: Magma — E minor, 158 BPM, intense sawtooth
+  { bpm: 158, bassNotes: [82.41,87.31,98.00,82.41,73.42,87.31,82.41,73.42], melodyNotes: [329.63,349.23,392.00,329.63,293.66,349.23,329.63,261.63], arpNotes: [659.25,698.46,784.00,659.25,587.33,698.46,659.25,523.25], bassWave:'sawtooth', melodyWave:'sawtooth', arpWave:'sawtooth', bassGain:0.32, melodyGain:0.22, arpGain:0.14, reverb:0.05 },
+];
+
+type LayerKind = 'bass' | 'melody' | 'arp';
+
+// ── PCM rendering ────────────────────────────────────────────────────────────
+
+async function renderLoop(theme: WorldTheme, layer: LayerKind): Promise<string> {
+  const noteStep = 60 / theme.bpm;
+  const stepsPerBar = 8;
+  const bars = 2;
+  const duration = noteStep * stepsPerBar * bars;
+  const sampleRate = 22050;
+
+  const offCtx = new OfflineAudioContext(1, Math.ceil(sampleRate * duration), sampleRate);
+
+  const notes   = layer === 'bass' ? theme.bassNotes   : layer === 'melody' ? theme.melodyNotes   : theme.arpNotes;
+  const wave    = layer === 'bass' ? theme.bassWave    : layer === 'melody' ? theme.melodyWave    : theme.arpWave;
+  const gainAmt = layer === 'bass' ? theme.bassGain    : layer === 'melody' ? theme.melodyGain    : theme.arpGain;
+  const noteDur = layer === 'arp'  ? noteStep * 0.48   : noteStep * 0.88;
+
+  const masterGain = offCtx.createGain();
+  masterGain.gain.value = gainAmt;
+
+  const delay = offCtx.createDelay(0.6);
+  const delayGain = offCtx.createGain();
+  delay.delayTime.value = 0.22;
+  delayGain.gain.value = theme.reverb * 0.35;
+  masterGain.connect(delay);
+  delay.connect(delayGain);
+  delayGain.connect(delay);
+  delayGain.connect(offCtx.destination);
+  masterGain.connect(offCtx.destination);
+
+  const shaper = offCtx.createWaveShaper();
+  const shaperCurve = new Float32Array(256);
+  for (let si = 0; si < 256; si++) {
+    const x = (2 * si / 256) - 1;
+    shaperCurve[si] = (Math.PI + 300) * x / (Math.PI + 300 * Math.abs(x));
+  }
+  shaper.curve = shaperCurve;
+  shaper.oversample = '2x';
+
+  const noteCount = stepsPerBar * bars;
+  for (let i = 0; i < noteCount; i++) {
+    const freq = notes[i % notes.length];
+    if (!freq) continue;
+
+    const startTime = i * noteStep;
+    const osc = offCtx.createOscillator();
+    const env = offCtx.createGain();
+
+    osc.type = wave;
+    osc.frequency.value = freq;
+
+    if (layer === 'melody') {
+      osc.frequency.setValueAtTime(freq * 0.997, startTime);
+      osc.frequency.linearRampToValueAtTime(freq * 1.003, startTime + noteDur * 0.5);
+      osc.frequency.linearRampToValueAtTime(freq * 0.997, startTime + noteDur);
+    }
+
+    const attack  = layer === 'bass' ? 0.012 : layer === 'melody' ? 0.020 : 0.005;
+    const release = layer === 'bass' ? 0.15  : layer === 'melody' ? 0.18  : 0.08;
+
+    env.gain.setValueAtTime(0.0001, startTime);
+    env.gain.linearRampToValueAtTime(1.0, startTime + attack);
+    env.gain.setValueAtTime(1.0, startTime + noteDur - release);
+    env.gain.exponentialRampToValueAtTime(0.0001, startTime + noteDur);
+
+    osc.connect(env);
+    env.connect(shaper);
+    shaper.connect(masterGain);
+
+    osc.start(startTime);
+    osc.stop(startTime + noteDur + 0.01);
+  }
+
+  const rendered = await offCtx.startRendering();
+  return audioBufToWavDataURL(rendered);
+}
+
+function audioBufToWavDataURL(buf: AudioBuffer): string {
+  const sampleRate = buf.sampleRate;
+  const pcm        = buf.getChannelData(0);
+  const numSamples = pcm.length;
+  const byteCount  = numSamples * 2;
+
+  const header = new ArrayBuffer(44);
+  const hv = new DataView(header);
+  const ws = (off: number, s: string) => { for (let i = 0; i < s.length; i++) hv.setUint8(off + i, s.charCodeAt(i)); };
+  ws(0, 'RIFF'); hv.setUint32(4, 36 + byteCount, true);
+  ws(8, 'WAVE'); ws(12, 'fmt '); hv.setUint32(16, 16, true);
+  hv.setUint16(20, 1, true); hv.setUint16(22, 1, true);
+  hv.setUint32(24, sampleRate, true); hv.setUint32(28, sampleRate * 2, true);
+  hv.setUint16(32, 2, true); hv.setUint16(34, 16, true);
+  ws(36, 'data'); hv.setUint32(40, byteCount, true);
+
+  const samples = new Int16Array(numSamples);
+  for (let i = 0; i < numSamples; i++) {
+    samples[i] = Math.max(-32768, Math.min(32767, Math.round(pcm[i] * 32767)));
+  }
+
+  const combined = new Uint8Array(44 + byteCount);
+  combined.set(new Uint8Array(header));
+  combined.set(new Uint8Array(samples.buffer), 44);
+
+  let binary = '';
+  for (let i = 0; i < combined.length; i++) binary += String.fromCharCode(combined[i]);
+  return 'data:audio/wav;base64,' + btoa(binary);
+}
+
+// ── AudioManager ─────────────────────────────────────────────────────────────
+
+interface BGMLayer { howl: Howl; id: number | null; targetVol: number; }
 
 class AudioManager {
   private ctx: AudioContext | null = null;
-  private bgmOsc: OscillatorNode[] = [];
-  private bgmGain: GainNode | null = null;
+  private currentWorld = -1;
+  private intensity: 0 | 1 | 2 = 1;
+  private layers: { bass?: BGMLayer; melody?: BGMLayer; arp?: BGMLayer } = {};
+  private renderedCache: Map<string, string> = new Map();
+  private renderReady = false;
+
+  constructor() {
+    new Howl({
+      src: ['data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEARKwAAIhYAQACABAAZGF0YQAAAAA='],
+      volume: 0,
+      preload: true,
+      html5: false
+    });
+    this.preRenderAllThemes().catch(() => { /* ignore if OfflineAudioContext unavailable */ });
+  }
+
+  private async preRenderAllThemes() {
+    for (let w = 0; w < WORLD_THEMES.length; w++) {
+      const theme = WORLD_THEMES[w];
+      for (const layer of ['bass', 'melody', 'arp'] as LayerKind[]) {
+        try {
+          const url = await renderLoop(theme, layer);
+          this.renderedCache.set(`${w}-${layer}`, url);
+        } catch { /* ignore */ }
+      }
+    }
+    this.renderReady = true;
+    if (this.currentWorld >= 0) {
+      this.startHowlLayers(this.currentWorld);
+    }
+  }
 
   private getCtx(): AudioContext {
+    if ((Howler as any).ctx) this.ctx = (Howler as any).ctx as AudioContext;
     if (!this.ctx) this.ctx = new AudioContext();
-    if (this.ctx.state === 'suspended') this.ctx.resume();
+    if (this.ctx.state === 'suspended') void this.ctx.resume();
     return this.ctx;
   }
 
   private play(fn: (ctx: AudioContext) => void) {
-    try { fn(this.getCtx()); } catch { /* ignore audio errors */ }
+    try { fn(this.getCtx()); } catch { /* ignore */ }
   }
+
+  // ── BGM ──────────────────────────────────────────────────────────────────
+
+  playBGM(worldIndex = 0) {
+    if (GameData_muted()) return;
+    const wi = Math.max(0, Math.min(worldIndex, WORLD_THEMES.length - 1));
+    if (wi === this.currentWorld) return;
+    this.currentWorld = wi;
+    this.fadeOutAll(400, () => {
+      if (this.renderReady) this.startHowlLayers(wi);
+    });
+  }
+
+  private startHowlLayers(wi: number) {
+    this.layers = {};
+    for (const layer of ['bass', 'melody', 'arp'] as LayerKind[]) {
+      const url = this.renderedCache.get(`${wi}-${layer}`);
+      if (!url) continue;
+      const targetVol = this.layerVolume(layer, this.intensity);
+      const howl = new Howl({ src: [url], loop: true, volume: 0, html5: false, preload: true });
+      const id = howl.play();
+      howl.fade(0, targetVol, 600, id ?? undefined);
+      this.layers[layer] = { howl, id: id ?? null, targetVol };
+    }
+  }
+
+  private layerVolume(layer: LayerKind, intensity: 0 | 1 | 2): number {
+    if (intensity === 0) return layer === 'bass' ? 0.85 : 0;
+    if (intensity === 1) return layer === 'arp'  ? 0    : (layer === 'bass' ? 0.85 : 0.75);
+    return layer === 'bass' ? 0.85 : layer === 'melody' ? 0.75 : 0.65;
+  }
+
+  setBGMIntensity(level: 0 | 1 | 2) {
+    if (this.intensity === level) return;
+    this.intensity = level;
+    for (const ln of ['bass', 'melody', 'arp'] as LayerKind[]) {
+      const layer = this.layers[ln];
+      if (!layer || layer.id === null) continue;
+      const vol = this.layerVolume(ln, level);
+      layer.howl.fade(layer.howl.volume(layer.id) as number, vol, 500, layer.id);
+      layer.targetVol = vol;
+    }
+  }
+
+  stopBGM() {
+    this.fadeOutAll(400, () => { this.currentWorld = -1; });
+  }
+
+  private fadeOutAll(ms: number, onComplete?: () => void) {
+    const active = Object.values(this.layers).filter((l): l is BGMLayer => !!l);
+    if (active.length === 0) { onComplete?.(); return; }
+    let done = 0;
+    for (const layer of active) {
+      if (layer.id !== null) {
+        const cur = layer.howl.volume(layer.id) as number;
+        layer.howl.fade(cur, 0, ms, layer.id);
+        layer.howl.once('fade', () => {
+          layer.howl.stop(layer.id ?? undefined);
+          done++;
+          if (done === active.length) onComplete?.();
+        }, layer.id);
+      } else { done++; if (done === active.length) onComplete?.(); }
+    }
+    this.layers = {};
+  }
+
+  // ── SFX ──────────────────────────────────────────────────────────────────
 
   playTap() {
     this.play(ctx => {
       const o = ctx.createOscillator(); const g = ctx.createGain();
       o.connect(g); g.connect(ctx.destination);
-      o.type = 'sine'; o.frequency.setValueAtTime(600, ctx.currentTime);
-      o.frequency.exponentialRampToValueAtTime(900, ctx.currentTime + 0.07);
+      o.type = 'sine'; o.frequency.setValueAtTime(620, ctx.currentTime);
+      o.frequency.exponentialRampToValueAtTime(950, ctx.currentTime + 0.07);
       g.gain.setValueAtTime(0.18, ctx.currentTime);
-      g.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.1);
-      o.start(); o.stop(ctx.currentTime + 0.1);
+      g.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.10);
+      o.start(); o.stop(ctx.currentTime + 0.10);
     });
   }
 
@@ -36,8 +289,8 @@ class AudioManager {
       o.frequency.exponentialRampToValueAtTime(900, ctx.currentTime + 0.06);
       o.frequency.exponentialRampToValueAtTime(1600, ctx.currentTime + 0.15);
       g.gain.setValueAtTime(0.22, ctx.currentTime);
-      g.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.2);
-      o.start(); o.stop(ctx.currentTime + 0.2);
+      g.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.20);
+      o.start(); o.stop(ctx.currentTime + 0.20);
     });
   }
 
@@ -57,28 +310,25 @@ class AudioManager {
 
   playExplosion() {
     this.play(ctx => {
-      // Noise burst
       const size = ctx.sampleRate * 0.4;
       const buf  = ctx.createBuffer(1, size, ctx.sampleRate);
       const data = buf.getChannelData(0);
       for (let i = 0; i < size; i++) data[i] = Math.random() * 2 - 1;
-
       const src = ctx.createBufferSource(); src.buffer = buf;
       const flt = ctx.createBiquadFilter(); flt.type = 'lowpass'; flt.frequency.value = 300;
       const g   = ctx.createGain();
       src.connect(flt); flt.connect(g); g.connect(ctx.destination);
       g.gain.setValueAtTime(0.5, ctx.currentTime);
       g.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.35);
-      src.start(); src.stop(ctx.currentTime + 0.4);
+      src.start(); src.stop(ctx.currentTime + 0.40);
 
-      // Sub thump
       const o = ctx.createOscillator(); const g2 = ctx.createGain();
       o.connect(g2); g2.connect(ctx.destination);
       o.type = 'sine'; o.frequency.setValueAtTime(80, ctx.currentTime);
       o.frequency.exponentialRampToValueAtTime(25, ctx.currentTime + 0.25);
-      g2.gain.setValueAtTime(0.4, ctx.currentTime);
-      g2.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.3);
-      o.start(); o.stop(ctx.currentTime + 0.3);
+      g2.gain.setValueAtTime(0.40, ctx.currentTime);
+      g2.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.30);
+      o.start(); o.stop(ctx.currentTime + 0.30);
     });
   }
 
@@ -99,23 +349,21 @@ class AudioManager {
 
   playCapsuleOpen() {
     this.play(ctx => {
-      // Pop
       const o = ctx.createOscillator(); const g = ctx.createGain();
       o.connect(g); g.connect(ctx.destination);
       o.type = 'sine'; o.frequency.setValueAtTime(200, ctx.currentTime);
       o.frequency.exponentialRampToValueAtTime(80, ctx.currentTime + 0.08);
       g.gain.setValueAtTime(0.25, ctx.currentTime);
-      g.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.1);
-      o.start(); o.stop(ctx.currentTime + 0.1);
+      g.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.10);
+      o.start(); o.stop(ctx.currentTime + 0.10);
 
-      // Sparkle
       [1047, 1319, 1568, 2093].forEach((freq, i) => {
         const o2 = ctx.createOscillator(); const g2 = ctx.createGain();
         o2.connect(g2); g2.connect(ctx.destination);
         o2.type = 'sine'; o2.frequency.value = freq;
         g2.gain.setValueAtTime(0, ctx.currentTime + 0.08 + i * 0.06);
-        g2.gain.linearRampToValueAtTime(0.12, ctx.currentTime + 0.1 + i * 0.06);
-        g2.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.2 + i * 0.06);
+        g2.gain.linearRampToValueAtTime(0.12, ctx.currentTime + 0.10 + i * 0.06);
+        g2.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.20 + i * 0.06);
         o2.start(ctx.currentTime + 0.08 + i * 0.06);
         o2.stop(ctx.currentTime + 0.22 + i * 0.06);
       });
@@ -157,19 +405,14 @@ class AudioManager {
     this.play(ctx => {
       [1, 1.5].forEach((mult, i) => {
         const o = ctx.createOscillator(); const g = ctx.createGain();
-        o.connect(g); g.connect(ctx.destination);
+        const f = ctx.createBiquadFilter(); f.type = 'lowpass'; f.frequency.value = 1500;
+        o.connect(f); f.connect(g); g.connect(ctx.destination);
         o.type = 'sawtooth';
-        
         const start = ctx.currentTime + i * 0.05;
         o.frequency.setValueAtTime(250 * mult, start);
         o.frequency.exponentialRampToValueAtTime(800 * mult, start + 0.18);
-        
-        g.gain.setValueAtTime(0.1, start);
-        g.gain.exponentialRampToValueAtTime(0.001, start + 0.2);
-        
-        const f = ctx.createBiquadFilter(); f.type = 'lowpass'; f.frequency.value = 1500;
-        o.disconnect(g); o.connect(f); f.connect(g);
-        
+        g.gain.setValueAtTime(0.10, start);
+        g.gain.exponentialRampToValueAtTime(0.001, start + 0.20);
         o.start(start); o.stop(start + 0.21);
       });
     });
@@ -186,77 +429,145 @@ class AudioManager {
         g.gain.linearRampToValueAtTime(0.18, ctx.currentTime + i * 0.11 + 0.03);
         g.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + i * 0.11 + 0.28);
         o.start(ctx.currentTime + i * 0.11);
-        o.stop(ctx.currentTime + i * 0.11 + 0.3);
+        o.stop(ctx.currentTime + i * 0.11 + 0.30);
       });
-
-      // Final chord
       [523, 659, 784].forEach(freq => {
         const o = ctx.createOscillator(); const g = ctx.createGain();
         o.connect(g); g.connect(ctx.destination);
         o.type = 'sine'; o.frequency.value = freq;
         g.gain.setValueAtTime(0, ctx.currentTime + 0.75);
-        g.gain.linearRampToValueAtTime(0.14, ctx.currentTime + 0.8);
-        g.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 1.6);
+        g.gain.linearRampToValueAtTime(0.14, ctx.currentTime + 0.80);
+        g.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 1.60);
         o.start(ctx.currentTime + 0.75); o.stop(ctx.currentTime + 1.65);
       });
     });
   }
 
-  playBGM() {
-    if (this.bgmOsc.length > 0) return;
-    try {
-      const ctx = this.getCtx();
-      this.bgmGain = ctx.createGain();
-      this.bgmGain.gain.value = 0.07;
-      this.bgmGain.connect(ctx.destination);
+  // ── NEW SFX ──────────────────────────────────────────────────────────────
 
-      const scale = [261.63, 293.66, 329.63, 392.00, 440.00];
-      let beat = 0;
+  /** Escalating chord sweep for combo x2, x3, x4, x5+ */
+  playComboFanfare(comboCount: number) {
+    this.play(ctx => {
+      const now = ctx.currentTime;
+      const chordSets = [
+        [659, 784, 1047],
+        [698, 880, 1175],
+        [784, 1047, 1319],
+        [880, 1175, 1480, 1760],
+      ];
+      const tier = Math.min(comboCount - 2, chordSets.length - 1);
+      const chord = chordSets[Math.max(0, tier)];
+      const boost = 1 + (comboCount - 2) * 0.08;
 
-      const scheduleNote = () => {
-        if (!this.bgmGain) return;
-        const freq = scale[beat % scale.length] * (beat % 10 < 5 ? 1 : 2);
+      chord.forEach((freq, i) => {
         const o = ctx.createOscillator(); const g = ctx.createGain();
-        o.type = 'triangle'; o.frequency.value = freq;
-        o.connect(g); g.connect(this.bgmGain);
-        g.gain.setValueAtTime(0, ctx.currentTime);
-        g.gain.linearRampToValueAtTime(0.5, ctx.currentTime + 0.05);
-        g.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.45);
-        o.start(); o.stop(ctx.currentTime + 0.5);
-        this.bgmOsc.push(o);
-        o.onended = () => { this.bgmOsc = this.bgmOsc.filter(x => x !== o); };
-        beat++;
-      };
+        o.connect(g); g.connect(ctx.destination);
+        o.type = 'triangle';
+        o.frequency.setValueAtTime(freq * boost, now + i * 0.035);
+        o.frequency.exponentialRampToValueAtTime(freq * boost * 1.015, now + i * 0.035 + 0.18);
+        g.gain.setValueAtTime(0.001, now + i * 0.035);
+        g.gain.linearRampToValueAtTime(0.16, now + i * 0.035 + 0.03);
+        g.gain.exponentialRampToValueAtTime(0.001, now + i * 0.035 + 0.28);
+        o.start(now + i * 0.035);
+        o.stop(now + i * 0.035 + 0.30);
+      });
 
-      const interval = setInterval(() => {
-        if (!this.bgmGain) { clearInterval(interval); return; }
-        scheduleNote();
-      }, 350);
-
-      // Store interval ID for cleanup
-      (this.bgmGain as any)._intervalId = interval;
-
-    } catch { /* ignore */ }
+      const sweep = ctx.createOscillator(); const swG = ctx.createGain();
+      sweep.connect(swG); swG.connect(ctx.destination);
+      sweep.type = 'sine';
+      sweep.frequency.setValueAtTime(300 * boost, now);
+      sweep.frequency.exponentialRampToValueAtTime(1800 * boost, now + 0.18);
+      swG.gain.setValueAtTime(0.12, now);
+      swG.gain.exponentialRampToValueAtTime(0.001, now + 0.20);
+      sweep.start(now); sweep.stop(now + 0.22);
+    });
   }
 
-  stopBGM() {
-    if (this.bgmGain) {
-      try {
-        const id = (this.bgmGain as any)._intervalId;
-        if (id) clearInterval(id);
-        this.bgmGain.gain.exponentialRampToValueAtTime(0.001, (this.ctx?.currentTime ?? 0) + 0.3);
-      } catch { /* ignore */ }
-      this.bgmGain = null;
-    }
-    this.bgmOsc.forEach(o => { try { o.stop(); } catch { } });
-    this.bgmOsc = [];
+  /** Short ascending arp when a level starts */
+  playLevelStart() {
+    this.play(ctx => {
+      [392, 494, 587, 784].forEach((freq, i) => {
+        const o = ctx.createOscillator(); const g = ctx.createGain();
+        o.connect(g); g.connect(ctx.destination);
+        o.type = 'sine'; o.frequency.value = freq;
+        const t = ctx.currentTime + i * 0.09;
+        g.gain.setValueAtTime(0.001, t);
+        g.gain.linearRampToValueAtTime(0.16, t + 0.02);
+        g.gain.exponentialRampToValueAtTime(0.001, t + 0.16);
+        o.start(t); o.stop(t + 0.18);
+      });
+    });
   }
+
+  /** Descending minor chord for defeat / out of moves */
+  playDefeat() {
+    this.play(ctx => {
+      const now = ctx.currentTime;
+      [440, 523, 659].forEach((freq, i) => {
+        const o = ctx.createOscillator(); const g = ctx.createGain();
+        o.connect(g); g.connect(ctx.destination);
+        o.type = 'triangle';
+        const t = now + i * 0.12;
+        o.frequency.setValueAtTime(freq, t);
+        o.frequency.exponentialRampToValueAtTime(freq * 0.85, t + 0.50);
+        g.gain.setValueAtTime(0.14, t);
+        g.gain.exponentialRampToValueAtTime(0.001, t + 0.60);
+        o.start(t); o.stop(t + 0.65);
+      });
+      const thud = ctx.createOscillator(); const tG = ctx.createGain();
+      thud.connect(tG); tG.connect(ctx.destination);
+      thud.type = 'sine';
+      thud.frequency.setValueAtTime(100, now + 0.42);
+      thud.frequency.exponentialRampToValueAtTime(35, now + 0.80);
+      tG.gain.setValueAtTime(0.30, now + 0.42);
+      tG.gain.exponentialRampToValueAtTime(0.001, now + 0.85);
+      thud.start(now + 0.42); thud.stop(now + 0.90);
+    });
+  }
+
+  /** 1/2/3-star jingle variants */
+  playStarEarn(stars: 1 | 2 | 3) {
+    this.play(ctx => {
+      const now = ctx.currentTime;
+      const notesets: number[][] = [
+        [523, 659],
+        [523, 659, 784, 1047],
+        [523, 659, 784, 1047, 1319, 1568],
+      ];
+      const notes = notesets[Math.min(stars - 1, 2)];
+      notes.forEach((freq, i) => {
+        const o = ctx.createOscillator(); const g = ctx.createGain();
+        o.connect(g); g.connect(ctx.destination);
+        o.type = stars === 3 ? 'triangle' : 'sine';
+        o.frequency.value = freq;
+        const t = now + i * (stars === 3 ? 0.09 : 0.08);
+        g.gain.setValueAtTime(0.001, t);
+        g.gain.linearRampToValueAtTime(0.18, t + 0.02);
+        g.gain.exponentialRampToValueAtTime(0.001, t + (stars === 3 ? 0.22 : 0.16));
+        o.start(t); o.stop(t + 0.25);
+      });
+      if (stars === 3) {
+        [1047, 1319, 1568].forEach((freq, i) => {
+          const o = ctx.createOscillator(); const g = ctx.createGain();
+          o.connect(g); g.connect(ctx.destination);
+          o.type = 'sine'; o.frequency.value = freq;
+          const t = now + 0.55 + i * 0.06;
+          g.gain.setValueAtTime(0.001, t);
+          g.gain.linearRampToValueAtTime(0.14, t + 0.02);
+          g.gain.exponentialRampToValueAtTime(0.001, t + 0.30);
+          o.start(t); o.stop(t + 0.34);
+        });
+      }
+    });
+  }
+
+  // ── World material SFX ────────────────────────────────────────────────────
 
   playMaterialLaunch(worldIndex: number) {
     this.play(ctx => {
       const now = ctx.currentTime;
       switch (worldIndex) {
-        case 1: { // Jelly
+        case 1: {
           const o = ctx.createOscillator(); const g = ctx.createGain();
           o.connect(g); g.connect(ctx.destination);
           o.type = 'sine';
@@ -267,7 +578,7 @@ class AudioManager {
           o.start(); o.stop(now + 0.20);
           break;
         }
-        case 2: { // Wood
+        case 2: {
           const o = ctx.createOscillator(); const g = ctx.createGain();
           o.connect(g); g.connect(ctx.destination);
           o.type = 'triangle';
@@ -278,7 +589,7 @@ class AudioManager {
           o.start(); o.stop(now + 0.10);
           break;
         }
-        case 3: { // Iron/Metal
+        case 3: {
           [650, 950, 1400].forEach((freq, idx) => {
             const o = ctx.createOscillator(); const g = ctx.createGain();
             o.connect(g); g.connect(ctx.destination);
@@ -291,7 +602,7 @@ class AudioManager {
           });
           break;
         }
-        case 4: { // Water
+        case 4: {
           const o = ctx.createOscillator(); const g = ctx.createGain();
           o.connect(g); g.connect(ctx.destination);
           o.type = 'sine';
@@ -302,9 +613,8 @@ class AudioManager {
           o.start(); o.stop(now + 0.17);
           break;
         }
-        case 5: { // Ice
-          // High chime
-          [1200, 1600].forEach((freq) => {
+        case 5: {
+          [1200, 1600].forEach(freq => {
             const o = ctx.createOscillator(); const g = ctx.createGain();
             o.connect(g); g.connect(ctx.destination);
             o.type = 'sine';
@@ -315,11 +625,10 @@ class AudioManager {
             g.gain.exponentialRampToValueAtTime(0.001, now + 0.22);
             o.start(); o.stop(now + 0.22);
           });
-          // Short crack noise
-          const size = ctx.sampleRate * 0.06;
-          const buf = ctx.createBuffer(1, size, ctx.sampleRate);
-          const data = buf.getChannelData(0);
-          for (let i = 0; i < size; i++) data[i] = Math.random() * 2 - 1;
+          const sz = ctx.sampleRate * 0.06;
+          const buf = ctx.createBuffer(1, sz, ctx.sampleRate);
+          const dat = buf.getChannelData(0);
+          for (let i = 0; i < sz; i++) dat[i] = Math.random() * 2 - 1;
           const src = ctx.createBufferSource(); src.buffer = buf;
           const flt = ctx.createBiquadFilter(); flt.type = 'highpass'; flt.frequency.value = 3000;
           const g2 = ctx.createGain();
@@ -329,8 +638,7 @@ class AudioManager {
           src.start(); src.stop(now + 0.06);
           break;
         }
-        case 6: { // Magma/Obsidian
-          // Low thump
+        case 6: {
           const o = ctx.createOscillator(); const g = ctx.createGain();
           o.connect(g); g.connect(ctx.destination);
           o.type = 'sawtooth';
@@ -340,22 +648,20 @@ class AudioManager {
           g.gain.exponentialRampToValueAtTime(0.001, now + 0.25);
           o.start(); o.stop(now + 0.25);
 
-          // Explosive noise
-          const size = ctx.sampleRate * 0.25;
-          const buf = ctx.createBuffer(1, size, ctx.sampleRate);
-          const data = buf.getChannelData(0);
-          for (let i = 0; i < size; i++) data[i] = Math.random() * 2 - 1;
-          const src = ctx.createBufferSource(); src.buffer = buf;
-          const flt = ctx.createBiquadFilter(); flt.type = 'lowpass'; flt.frequency.value = 450;
-          const g2 = ctx.createGain();
-          src.connect(flt); flt.connect(g2); g2.connect(ctx.destination);
-          g2.gain.setValueAtTime(0.35, now);
-          g2.gain.exponentialRampToValueAtTime(0.001, now + 0.24);
-          src.start(); src.stop(now + 0.25);
+          const sz2 = ctx.sampleRate * 0.25;
+          const buf2 = ctx.createBuffer(1, sz2, ctx.sampleRate);
+          const dat2 = buf2.getChannelData(0);
+          for (let i = 0; i < sz2; i++) dat2[i] = Math.random() * 2 - 1;
+          const src2 = ctx.createBufferSource(); src2.buffer = buf2;
+          const flt2 = ctx.createBiquadFilter(); flt2.type = 'lowpass'; flt2.frequency.value = 450;
+          const g3 = ctx.createGain();
+          src2.connect(flt2); flt2.connect(g3); g3.connect(ctx.destination);
+          g3.gain.setValueAtTime(0.35, now);
+          g3.gain.exponentialRampToValueAtTime(0.001, now + 0.24);
+          src2.start(); src2.stop(now + 0.25);
           break;
         }
-        default:
-          this.playLaunch();
+        default: this.playLaunch();
       }
     });
   }
@@ -364,7 +670,7 @@ class AudioManager {
     this.play(ctx => {
       const now = ctx.currentTime;
       switch (worldIndex) {
-        case 1: { // Jelly bump: low-pitch soft wiggle
+        case 1: {
           const o = ctx.createOscillator(); const g = ctx.createGain();
           o.connect(g); g.connect(ctx.destination);
           o.type = 'sine';
@@ -376,7 +682,7 @@ class AudioManager {
           o.start(); o.stop(now + 0.16);
           break;
         }
-        case 2: { // Wood bump: dry percussive knock
+        case 2: {
           const o = ctx.createOscillator(); const g = ctx.createGain();
           o.connect(g); g.connect(ctx.destination);
           o.type = 'triangle';
@@ -387,7 +693,7 @@ class AudioManager {
           o.start(); o.stop(now + 0.06);
           break;
         }
-        case 3: { // Iron bump: metallic click
+        case 3: {
           const o = ctx.createOscillator(); const g = ctx.createGain();
           o.connect(g); g.connect(ctx.destination);
           o.type = 'triangle';
@@ -399,7 +705,7 @@ class AudioManager {
           o.start(); o.stop(now + 0.08);
           break;
         }
-        case 4: { // Water bump: wet bloop
+        case 4: {
           const o = ctx.createOscillator(); const g = ctx.createGain();
           o.connect(g); g.connect(ctx.destination);
           o.type = 'sine';
@@ -410,7 +716,7 @@ class AudioManager {
           o.start(); o.stop(now + 0.10);
           break;
         }
-        case 5: { // Ice bump: tiny glassy tick
+        case 5: {
           const o = ctx.createOscillator(); const g = ctx.createGain();
           o.connect(g); g.connect(ctx.destination);
           o.type = 'sine';
@@ -420,7 +726,7 @@ class AudioManager {
           o.start(); o.stop(now + 0.04);
           break;
         }
-        case 6: { // Magma bump: low heavy thud
+        case 6: {
           const o = ctx.createOscillator(); const g = ctx.createGain();
           o.connect(g); g.connect(ctx.destination);
           o.type = 'triangle';
@@ -431,11 +737,14 @@ class AudioManager {
           o.start(); o.stop(now + 0.15);
           break;
         }
-        default:
-          this.playBump();
+        default: this.playBump();
       }
     });
   }
+}
+
+function GameData_muted(): boolean {
+  try { return localStorage.getItem('arrow_buddies_muted') === 'true'; } catch { return false; }
 }
 
 export const audio = new AudioManager();

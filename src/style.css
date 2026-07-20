@@ -1,53 +1,73 @@
-/* Arrow Buddies 3D — Mobile-first CSS for Phaser canvas */
+/* Arrow Buddies 3D — Mobile-first CSS (Phaser 4 + portrait-primary layout) */
+
+/* ── Fonts ────────────────────────────────────────────────────────────── */
+@import url('https://fonts.googleapis.com/css2?family=Fredoka:wght@400;600;700&family=Orbitron:wght@400;700;900&display=swap');
+
+/* ── Reset ────────────────────────────────────────────────────────────── */
 *, *::before, *::after {
   margin: 0;
   padding: 0;
   box-sizing: border-box;
 }
 
-/* Full-bleed body — no scroll, no rubber-band, no text selection */
+/* ── Full-bleed body — no scroll, no rubber-band, no text-select ─────── */
 html {
   height: 100%;
-  height: -webkit-fill-available; /* iOS Safari full height */
+  height: 100dvh;
+  height: -webkit-fill-available;
   overflow: hidden;
 }
 
 body {
   width: 100%;
   height: 100%;
-  height: 100dvh;               /* dynamic viewport: respects keyboard/notch */
+  height: 100dvh;
   overflow: hidden;
   background: #0a001a;
-  touch-action: none;           /* disable browser pan/zoom on the whole body */
+
+  /* Disable ALL browser touch behaviours on the canvas */
+  touch-action: none;
   user-select: none;
   -webkit-user-select: none;
-  overscroll-behavior: none;    /* prevent pull-to-refresh / over-scroll glow */
+  overscroll-behavior: none;
   -webkit-tap-highlight-color: transparent;
   -webkit-text-size-adjust: 100%;
+
+  /* Disable context menu on long-press */
+  -webkit-touch-callout: none;
 }
 
-/* Game container fills the safe area (notch-aware) */
+/* ── Game container — centered, portrait-clamped ─────────────────────── */
 #game-container {
-  position: absolute;
-  left: 50%;
-  top: 50%;
-  transform: translate(-50%, -50%);
-  width: 100dvw;
-  height: 100dvh;
-  /* Enforce aspect-ratio constraints for portrait layouts (between 9:21 and 3:4) */
-  max-width: calc(100dvh * 0.75);
-  max-height: calc(100dvw / 0.428);
-  box-shadow: 0 0 50px rgba(0, 0, 0, 0.9);
+  position: fixed;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   background: #0a001a;
-  overflow: hidden;
 }
 
-/* Canvas always fills the container exactly — Phaser handles aspect ratio */
+/* Phaser canvas fills available space, Phaser Scale.RESIZE handles the rest */
 #game-container canvas {
   display: block;
-  width: 100% !important;
-  height: 100% !important;
-  /* Crisp pixel rendering on high-DPR screens */
+  /* Let the browser do smooth bicubic scaling — looks much better than pixelated */
+  image-rendering: auto;
   image-rendering: -webkit-optimize-contrast;
-  image-rendering: pixelated;
+  /* No forced width/height — Phaser Scale.RESIZE manages this */
+  max-width: 100%;
+  max-height: 100%;
 }
+
+/* ── Safe-area insets (notch / home-bar on iOS) ───────────────────────── */
+@supports (padding-top: env(safe-area-inset-top)) {
+  body {
+    padding-top: env(safe-area-inset-top);
+    padding-bottom: env(safe-area-inset-bottom);
+    padding-left: env(safe-area-inset-left);
+    padding-right: env(safe-area-inset-right);
+  }
+}
+
+/* ── Scrollbar hide (visible in desktop testing) ─────────────────────── */
+::-webkit-scrollbar { display: none; }
+scrollbar-width: none;

@@ -3,6 +3,7 @@ import Phaser from 'phaser';
 import { GameData } from '../utils/GameData';
 import { audio } from '../audio';
 import { createCartoonButton } from '../utils/IsoHelper';
+import { gsap } from 'gsap';
 
 export class DailyChallengeScene extends Phaser.Scene {
   constructor() { super({ key: 'DailyChallenge' }); }
@@ -10,29 +11,40 @@ export class DailyChallengeScene extends Phaser.Scene {
   create() {
     const W = this.scale.width, H = this.scale.height;
 
-    this.cameras.main.setBackgroundColor('#0a001a');
-    this.cameras.main.fadeIn(400, 10, 0, 26);
+    // Bright cartoon style peach background
+    this.cameras.main.setBackgroundColor('#fff5ea');
+    this.cameras.main.fadeIn(400, 255, 245, 234);
 
-    // Star background
     const bg = this.add.graphics();
-    bg.fillStyle(0x0a001a, 1);
+    bg.fillStyle(0xfff5ea, 1);
     bg.fillRect(0, 0, W, H);
-    for (let i = 0; i < 70; i++) {
-      bg.fillStyle(0xffffff, 0.2 + Math.random() * 0.5);
-      bg.fillCircle(Math.random() * W, Math.random() * H, Math.random() * 1.5 + 0.3);
+    
+    // Soft sunny glow
+    gBgGlow = this.add.graphics();
+    gBgGlow.fillStyle(0xfff0e0, 0.7);
+    gBgGlow.fillCircle(W / 2, H * 0.35, Math.min(W, H) * 0.6);
+
+    // Subtle floating cartoon bubbles
+    for (let i = 0; i < 12; i++) {
+      const rx = Math.random() * W;
+      const ry = Math.random() * H;
+      bg.fillStyle(0xffffff, 0.45);
+      bg.fillCircle(rx, ry, Math.random() * 30 + 10);
     }
 
-    // Header
+    // Header (Bubbly Fredoka Font with orange color drop shadow)
     this.add.text(W / 2, H * 0.10, '📅 Daily Challenge', {
-      fontFamily: 'Orbitron',
-      fontSize: Math.min(W * 0.08, 36) + 'px',
-      color: '#00ffcc',
-      shadow: { offsetX: 0, offsetY: 4, color: '#008866', blur: 16, fill: true }
+      fontFamily: 'Fredoka, sans-serif',
+      fontSize: Math.min(W * 0.08, 38) + 'px',
+      color: '#ff9f1c',
+      fontStyle: 'bold',
+      stroke: '#ffffff', strokeThickness: 5,
+      shadow: { offsetX: 0, offsetY: 4, color: '#5c3d2e', blur: 0, fill: true }
     }).setOrigin(0.5);
 
     const todayStr = new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' });
     this.add.text(W / 2, H * 0.16, `Today: ${todayStr}`, {
-      fontFamily: 'Orbitron', fontSize: '18px', color: '#ccbbed'
+      fontFamily: 'Fredoka, sans-serif', fontSize: '18px', color: '#7f8c8d', fontStyle: 'bold'
     }).setOrigin(0.5);
 
     // Current Streak Info
@@ -42,112 +54,165 @@ export class DailyChallengeScene extends Phaser.Scene {
     const alreadyPlayedToday = (lastPlayed === todayISO);
 
     this.add.text(W / 2, H * 0.22, `🔥 Current Streak: Day ${currentStreak} of 7`, {
-      fontFamily: 'Orbitron', fontSize: '18px', color: '#ffe45e', fontStyle: 'bold'
+      fontFamily: 'Fredoka, sans-serif', fontSize: '20px', color: '#e67e22', fontStyle: 'bold'
     }).setOrigin(0.5);
 
-    // Draw 7-Day Timeline Card Grid
+    // Draw 7-Day Timeline Card Grid (Bubbly White Cards)
     const cardW = Math.min((W * 0.88) / 7, 85);
-    const cardH = cardW * 1.35;
+    const cardH = cardW * 1.45;
     const totalGridW = cardW * 7 + 6 * 8;
     const startX = W / 2 - totalGridW / 2 + cardW / 2;
-    const gridY = H * 0.45;
+    const gridY = H * 0.44;
 
-    const g = this.add.graphics();
+    const cardsContainer = this.add.container(0, 0);
 
     for (let day = 1; day <= 7; day++) {
       const cx = startX + (day - 1) * (cardW + 8);
       const isPast = day < currentStreak || (day === currentStreak && alreadyPlayedToday);
       const isCurrent = (day === currentStreak && !alreadyPlayedToday);
 
-      // Card bg
-      g.fillStyle(isCurrent ? 0x2d1254 : isPast ? 0x112233 : 0x150826, 1);
-      g.fillRoundedRect(cx - cardW / 2, gridY - cardH / 2, cardW, cardH, 12);
+      const card = this.add.container(cx, gridY).setAlpha(0);
 
-      // Border
-      const borderCol = isCurrent ? 0x00ffcc : isPast ? 0x44aa88 : 0x443366;
-      g.lineStyle(isCurrent ? 3 : 1.5, borderCol, 1);
-      g.strokeRoundedRect(cx - cardW / 2, gridY - cardH / 2, cardW, cardH, 12);
+      const g = this.add.graphics();
+      // Premium soft-plastic cartoon colors
+      const bgCardCol = isCurrent ? 0xfff3e0 : isPast ? 0xeafaf1 : 0xffffff;
+      const borderCardCol = isCurrent ? 0xff9f1c : isPast ? 0x2ecc71 : 0xffd8b3;
+
+      g.fillStyle(bgCardCol, 1);
+      g.fillRoundedRect(-cardW / 2, -cardH / 2, cardW, cardH, 16);
+
+      g.lineStyle(isCurrent ? 3.5 : 2, borderCardCol, 1.0);
+      g.strokeRoundedRect(-cardW / 2, -cardH / 2, cardW, cardH, 16);
+
+      // Shadow depth
+      g.fillStyle(0x000000, 0.05);
+      g.fillRoundedRect(-cardW / 2, -cardH / 2 + 5, cardW, cardH, 16);
 
       // Day label
-      this.add.text(cx, gridY - cardH * 0.32, `Day ${day}`, {
-        fontFamily: 'Orbitron', fontSize: Math.min(cardW * 0.24, 14) + 'px',
-        color: isCurrent ? '#00ffcc' : '#ffffff'
+      const dLabel = this.add.text(0, -cardH * 0.35, `Day ${day}`, {
+        fontFamily: 'Fredoka, sans-serif', fontSize: Math.min(cardW * 0.22, 14) + 'px',
+        color: isCurrent ? '#d35400' : isPast ? '#27ae60' : '#7f8c8d', fontStyle: 'bold'
       }).setOrigin(0.5);
 
-      // Reward icon & text
+      // Reward icon
       let icon = '🪙';
       let amountTxt = `+${day * 50}`;
       if (day === 7) {
-        icon = '🐉';
-        amountTxt = 'Dragon Skin!';
+        icon = '🐲';
+        amountTxt = 'Skin!';
       } else if (day === 5) {
         icon = '👑';
-        amountTxt = 'Gold Crown!';
+        amountTxt = 'Crown!';
       }
 
-      this.add.text(cx, gridY - cardH * 0.02, icon, {
+      const dIcon = this.add.text(0, -cardH * 0.05, icon, {
         fontSize: Math.min(cardW * 0.42, 28) + 'px'
       }).setOrigin(0.5);
 
-      this.add.text(cx, gridY + cardH * 0.3, amountTxt, {
-        fontFamily: 'Orbitron', fontSize: Math.min(cardW * 0.18, 11) + 'px',
-        color: '#ffe45e', align: 'center'
+      const dReward = this.add.text(0, cardH * 0.28, amountTxt, {
+        fontFamily: 'Fredoka, sans-serif', fontSize: Math.min(cardW * 0.18, 11) + 'px',
+        color: '#f39c12', fontStyle: 'bold', align: 'center'
       }).setOrigin(0.5);
 
+      card.add([g, dLabel, dIcon, dReward]);
+
       if (isPast) {
-        // Checkmark overlay
-        this.add.text(cx, gridY, '✅', { fontSize: '24px' }).setOrigin(0.5).setAlpha(0.85);
+        const check = this.add.text(0, 0, '✅', { fontSize: '24px' }).setOrigin(0.5).setAlpha(0.9);
+        card.add(check);
       }
+
+      cardsContainer.add(card);
+
+      gsap.to(card, {
+        alpha: 1,
+        y: gridY - 8,
+        duration: 0.5,
+        ease: 'back.out(1.5)',
+        delay: 0.3 + day * 0.08
+      });
     }
 
-    // Action Button
-    const btnY = H * 0.78;
-    const btnContainer = this.add.container(W / 2, btnY).setDepth(10);
-    const btnW = Math.min(W * 0.75, 300), btnH = 56;
+    // Action Button (Bubbly Green Button)
+    const btnY = H * 0.76;
+    const btnW = Math.min(W * 0.75, 300), btnH = 58;
+    const btnContainer = this.add.container(W / 2, btnY).setAlpha(0);
+
     const btnGfx = this.add.graphics();
+    btnContainer.add(btnGfx);
 
-    const drawBtn = (hover: boolean) => {
-      btnGfx.clear();
-      const fill = alreadyPlayedToday ? 0x444455 : hover ? 0x00e6b8 : 0x00bb88;
-      btnGfx.fillStyle(fill, 1);
-      btnGfx.fillRoundedRect(-btnW / 2, -btnH / 2, btnW, btnH, 28);
-      if (!alreadyPlayedToday) {
-        for (let p = 0; p < 3; p++) {
-          btnGfx.lineStyle([5, 3, 1.5][p], 0x00ffcc, [0.15, 0.35, 0.8][p]);
-          btnGfx.strokeRoundedRect(-btnW / 2, -btnH / 2, btnW, btnH, 28);
-        }
-      }
-    };
-    drawBtn(false);
-
-    const btnLabelStr = alreadyPlayedToday ? '⏳ Come Back Tomorrow!' : '🚀 Play Daily Challenge!';
-    const btnFontSize = Math.min(Math.round(btnH * 0.38), Math.round(btnW / Math.max(btnLabelStr.length * 0.5, 1)), 18);
-    const btnLabel = this.add.text(0, 0, btnLabelStr, {
-      fontFamily: 'Orbitron', fontSize: `${btnFontSize}px`, color: '#0a001a', fontStyle: 'bold', align: 'center'
+    const btnLabelStr = alreadyPlayedToday ? '⏳ Locked Until Tomorrow' : '🚀 Play Challenge!';
+    const btnFontSize = 18;
+    const btnLabel = this.add.text(0, -2, btnLabelStr, {
+      fontFamily: 'Fredoka, sans-serif', fontSize: `${btnFontSize}px`, color: '#ffffff', fontStyle: 'bold',
+      stroke: '#000000', strokeThickness: 1.5, align: 'center'
     }).setOrigin(0.5);
+    btnContainer.add(btnLabel);
 
-    btnContainer.add([btnGfx, btnLabel]);
+    const drawBtn = (state: 'idle' | 'hover' | 'pressed') => {
+      btnGfx.clear();
+      let faceY = -btnH / 2;
+      let shH = 6;
+      
+      if (state === 'pressed') {
+        faceY = -btnH / 2 + 4;
+        shH = 2;
+        btnLabel.setY(2);
+      } else {
+        btnLabel.setY(-2);
+      }
+
+      const fill = alreadyPlayedToday ? 0xbdc3c7 : (state === 'hover' ? 0x2ecc71 : 0x21c25e);
+      const stroke = alreadyPlayedToday ? 0x95a5a6 : 0x27ae60;
+
+      // 3D shadow bottom face
+      btnGfx.fillStyle(stroke, 1);
+      btnGfx.fillRoundedRect(-btnW / 2, -btnH / 2 + shH, btnW, btnH, 24);
+
+      // Main face
+      btnGfx.fillStyle(fill, 1);
+      btnGfx.fillRoundedRect(-btnW / 2, faceY, btnW, btnH, 24);
+    };
+    drawBtn('idle');
 
     if (!alreadyPlayedToday) {
       btnContainer.setInteractive(new Phaser.Geom.Rectangle(-btnW / 2, -btnH / 2, btnW, btnH), Phaser.Geom.Rectangle.Contains);
       btnContainer.input!.cursor = 'pointer';
-      btnContainer.on('pointerover', () => drawBtn(true));
-      btnContainer.on('pointerout',  () => drawBtn(false));
+
+      btnContainer.on('pointerover', () => {
+        drawBtn('hover');
+        gsap.to(btnContainer, { scale: 1.05, duration: 0.1, overwrite: 'auto' });
+      });
+      btnContainer.on('pointerout',  () => {
+        drawBtn('idle');
+        gsap.to(btnContainer, { scale: 1.0, duration: 0.1, overwrite: 'auto' });
+      });
       btnContainer.on('pointerdown', () => {
+        drawBtn('pressed');
+        gsap.to(btnContainer, { scale: 0.96, duration: 0.05, overwrite: 'auto' });
+      });
+      btnContainer.on('pointerup', () => {
+        drawBtn('hover');
+        gsap.to(btnContainer, { scale: 1.05, duration: 0.08, overwrite: 'auto' });
         audio.playTap();
-        this.cameras.main.fadeOut(300, 10, 0, 26);
+        this.cameras.main.fadeOut(300, 255, 245, 234);
         this.time.delayedCall(320, () => {
-          // Launch GameScene with daily flag
           this.scene.start('Game', { world: 3, level: (new Date().getDate() % 5) + 1, isDaily: true });
         });
       });
     }
 
-    // Back button
-    createCartoonButton(this, 75, 38, 100, 42, '◀ Menu', () => {
+    gsap.to(btnContainer, {
+      alpha: 1,
+      duration: 0.5,
+      delay: 1.0
+    });
+
+    // Back button (Pink Bubbly Cartoon style)
+    createCartoonButton(this, 75, 42, 100, 42, '◀ Menu', () => {
       audio.playTap();
-      this.cameras.main.fadeOut(300, 10, 0, 26);
+      this.cameras.main.fadeOut(300, 255, 245, 234);
       this.time.delayedCall(320, () => this.scene.start('Menu'));
-    }, { bgColor: 0x9b72ff, fontSize: 16 });
+    }, { bgColor: 0xe91e63, fontSize: 16 });
   }
 }
+let gBgGlow: Phaser.GameObjects.Graphics;

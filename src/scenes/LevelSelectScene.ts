@@ -5,9 +5,9 @@ import { audio } from '../audio';
 import {
   TILE_W, TILE_H, BLOCK_H,
   drawIsoCube, drawHat, hslToInt,
-  drawCartoonCosmicBg, createCosmicEffects,
   createCartoonButton
 } from '../utils/IsoHelper';
+import { gsap } from 'gsap';
 
 interface LevelNode {
   levelIdx: number;
@@ -45,23 +45,49 @@ export class LevelSelectScene extends Phaser.Scene {
   create() {
     const W = this.scale.width, H = this.scale.height;
 
-    // Background
+    // Bright cartoon style peach background
     this.bgGfx = this.add.graphics();
-    // Grid lines color based on world index
+    const bgBgGlow2 = this.add.graphics();
+    
+    this.cameras.main.setBackgroundColor('#fff5ea');
+    this.cameras.main.fadeIn(400, 255, 245, 234);
+
+    this.bgGfx.fillStyle(0xfff5ea, 1);
+    this.bgGfx.fillRect(0, 0, W, H);
+
+    // Warm radial spots in bg
     const worldHues: Record<number, number> = { 1: 330, 2: 175, 3: 270, 4: 195, 5: 210, 6: 15 };
     const wHue = worldHues[this.worldIndex] ?? 280;
-    drawCartoonCosmicBg(this.bgGfx, W, H, wHue);
-    createCosmicEffects(this, W, H, wHue);
+    const accentCol = hslToInt(wHue, 90, 85);
+
+    bgBgGlow2.fillStyle(accentCol, 0.6);
+    bgBgGlow2.fillCircle(W / 2, H * 0.35, Math.min(W, H) * 0.65);
+
+    // Subtle cartoon bubble floats
+    for (let i = 0; i < 12; i++) {
+      this.bgGfx.fillStyle(0xffffff, 0.45);
+      this.bgGfx.fillCircle(Math.random() * W, Math.random() * H, Math.random() * 25 + 10);
+    }
 
     // Graphics layers
     this.pathGfx = this.add.graphics();
     this.blockGfx = this.add.graphics();
 
-    // Title
-    this.add.text(W / 2, H * 0.08, `World ${this.worldIndex} Levels`, {
-      fontFamily: 'Orbitron', fontSize: Math.min(W * 0.07, 36) + 'px', color: '#ffffff',
-      shadow: { offsetX: 0, offsetY: 4, color: '#6600ff', blur: 16, fill: true }
-    }).setOrigin(0.5);
+    // Title (Fredoka, drop shadow, kid cartoon style)
+    const titleTxt = this.add.text(W / 2, H * 0.08, `World ${this.worldIndex} Levels`, {
+      fontFamily: 'Fredoka, sans-serif', fontSize: Math.min(W * 0.07, 34) + 'px', color: '#ff9f1c',
+      fontStyle: 'bold',
+      stroke: '#ffffff', strokeThickness: 5,
+      shadow: { offsetX: 0, offsetY: 4, color: '#5c3d2e', blur: 0, fill: true }
+    }).setOrigin(0.5).setAlpha(0);
+
+    gsap.to(titleTxt, {
+      alpha: 1,
+      y: H * 0.08,
+      duration: 0.5,
+      ease: 'back.out(1.5)',
+      delay: 0.1
+    });
 
     // Retrieve progress
     const savedLevel = parseInt(localStorage.getItem(`arrow_buddies_w${this.worldIndex}_level`) ?? '1');
@@ -75,7 +101,7 @@ export class LevelSelectScene extends Phaser.Scene {
       { x: W * 0.68, y: H * 0.22 }
     ];
 
-    // Build level nodes AND create persistent text overlays (created once, repositioned each frame)
+    // Build level nodes
     this.nodes = pts.map((pt, i) => {
       const levelIdx = i + 1;
       const unlocked = levelIdx <= savedLevel;
@@ -90,55 +116,58 @@ export class LevelSelectScene extends Phaser.Scene {
       };
 
       if (unlocked) {
-        // Level number badge — no shadow, clean neon text
+        // Level number badge (Fredoka font)
         node.numTxt = this.add.text(pt.x, pt.y, `${levelIdx}`, {
-          fontFamily: 'Orbitron',
+          fontFamily: 'Fredoka, sans-serif',
           fontSize: '18px',
           fontStyle: 'bold',
           color: '#ffffff',
           stroke: '#000000',
-          strokeThickness: 3
-        }).setOrigin(0.5).setDepth(22);
+          strokeThickness: 2
+        }).setOrigin(0.5).setDepth(22).setAlpha(0);
 
-        // Star row — created once, repositioned
+        // Star row
         node.starTxts = [];
         for (let st = 0; st < 3; st++) {
           const starChar = stars > st ? '⭐' : '○';
-          const starCol  = stars > st ? '#ffe45e' : '#554466';
+          const starCol  = stars > st ? '#f39c12' : '#bdc3c7';
           const stTxt = this.add.text(pt.x + (st - 1) * 22, pt.y, starChar, {
-            fontFamily: 'Orbitron', fontSize: '13px', color: starCol
-          }).setOrigin(0.5).setDepth(21);
+            fontFamily: 'Fredoka, sans-serif', fontSize: '13px', color: starCol, fontStyle: 'bold'
+          }).setOrigin(0.5).setDepth(21).setAlpha(0);
           node.starTxts.push(stTxt);
         }
       } else {
-        // Lock icon — created once
+        // Lock icon
         node.lockTxt = this.add.text(pt.x, pt.y, '🔒', {
-          fontFamily: 'Orbitron', fontSize: '16px'
-        }).setOrigin(0.5).setDepth(22);
+          fontFamily: 'Fredoka, sans-serif', fontSize: '16px'
+        }).setOrigin(0.5).setDepth(22).setAlpha(0);
       }
+
+      // GSAP entrance cascade for overlays
+      this.time.delayedCall(200 + i * 80, () => {
+        if (node.numTxt) gsap.to(node.numTxt, { alpha: 1, duration: 0.3 });
+        if (node.lockTxt) gsap.to(node.lockTxt, { alpha: 1, duration: 0.3 });
+        node.starTxts?.forEach(stTxt => gsap.to(stTxt, { alpha: 1, duration: 0.3 }));
+      });
 
       return node;
     });
 
-    // Create interactive click zones for level nodes
+    // Create interactive click zones
     this.nodes.forEach(node => {
       if (!node.unlocked) return;
-      // Zone around cube center
       const zone = this.add.zone(node.x, node.y, 90, 90).setInteractive({ useHandCursor: true });
       zone.on('pointerdown', () => {
         this.triggerNodeClick(node);
       });
     });
 
-    // Back Button
-    createCartoonButton(this, 75, 38, 120, 42, '◀ Worlds', () => {
+    // Back Button (Pink Bubbly Cartoon style)
+    createCartoonButton(this, 75, 42, 120, 42, '◀ Worlds', () => {
       audio.playTap();
-      this.cameras.main.fadeOut(300, 10, 0, 26);
+      this.cameras.main.fadeOut(300, 255, 245, 234);
       this.time.delayedCall(320, () => this.scene.start('WorldSelect'));
-    }, { bgColor: 0x9b72ff, fontSize: 16 });
-
-    // Fade in
-    this.cameras.main.fadeIn(400, 10, 0, 26);
+    }, { bgColor: 0xe91e63, fontSize: 16 });
   }
 
   private triggerNodeClick(node: LevelNode) {
@@ -156,7 +185,7 @@ export class LevelSelectScene extends Phaser.Scene {
     });
 
     this.time.delayedCall(220, () => {
-      this.cameras.main.fadeOut(350, 10, 0, 26);
+      this.cameras.main.fadeOut(350, 255, 245, 234);
     });
 
     this.time.delayedCall(580, () => {
@@ -182,7 +211,7 @@ export class LevelSelectScene extends Phaser.Scene {
     this.nodes.forEach((node, i) => {
       node.animT += dt;
 
-      // Vertical hover oscillation for unlocked levels
+      // Vertical hover oscillation
       let hover = 0;
       if (node.unlocked && node.state !== 'launch') {
         hover = Math.sin(this.time.now * 0.0025 + i * 1.6) * 5.5;
@@ -195,14 +224,14 @@ export class LevelSelectScene extends Phaser.Scene {
         node.scalePerp = 1;
         node.angle = 0;
 
-        // Mouse hover scaling react
+        // Pointer react
         const pointer = this.input.activePointer;
         const dist = Math.hypot(pointer.x - node.x, pointer.y - node.cy);
         if (node.unlocked && dist < 55) {
           const squeeze = 1.0 - (1.0 - dist / 55) * 0.12;
           node.scalePara = squeeze;
           node.scalePerp = 2.0 - squeeze;
-          node.angle = Math.PI / 2; // vertical hover squash
+          node.angle = Math.PI / 2;
         }
       } else if (node.state === 'wiggle') {
         const dur = 0.60;
@@ -216,13 +245,11 @@ export class LevelSelectScene extends Phaser.Scene {
         }
       } else if (node.state === 'launch') {
         if (node.animT < 0.15) {
-          // Wind-up squeeze
           node.scalePara = 0.62;
           node.scalePerp = 1.38;
           node.cy = node.y + 14;
           node.angle = Math.PI / 2;
         } else {
-          // Stretch and shoot up!
           const flyT = node.animT - 0.15;
           node.scalePara = 1.48;
           node.scalePerp = 0.65;
@@ -233,13 +260,13 @@ export class LevelSelectScene extends Phaser.Scene {
 
       // Draw the node
       const cx = node.x, cy = node.cy;
-      const s = 1.15; // standard level selector cube scale
+      const s = 1.15;
       const tw = TILE_W * s, th = TILE_H * s, bh = BLOCK_H * s;
 
-      const topCol   = node.unlocked ? hslToInt(wHue, 92, 70) : 0x2e243a;
-      const leftCol  = node.unlocked ? hslToInt(wHue, 82, 50) : 0x221a2c;
-      const rightCol = node.unlocked ? hslToInt(wHue, 85, 33) : 0x16101e;
-      const glowCol  = node.unlocked ? hslToInt(wHue, 100, 80) : 0x3d304e;
+      const topCol   = node.unlocked ? hslToInt(wHue, 92, 70) : 0xd5c7b3;
+      const leftCol  = node.unlocked ? hslToInt(wHue, 82, 50) : 0xbdc3c7;
+      const rightCol = node.unlocked ? hslToInt(wHue, 85, 33) : 0x95a5a6;
+      const glowCol  = node.unlocked ? hslToInt(wHue, 100, 80) : 0xe0e0e0;
 
       const scalePara = node.scalePara;
       const scalePerp = node.scalePerp;
@@ -264,19 +291,18 @@ export class LevelSelectScene extends Phaser.Scene {
       // Render block
       drawIsoCube(g, cx, cy, topCol, leftCol, rightCol, glowCol, node.unlocked ? 0.65 : 0.25, transformer, this.worldIndex, this.time.now);
 
-      // ── Overlay: reposition pre-created text objects ───────────────
+      // Overlays
       if (node.unlocked) {
         const topCenter = tPt(cx, cy - th * 0.55);
         const isFlyHide = node.state === 'launch' && node.animT > 0.15;
         const overlayAlpha = isFlyHide ? 0 : 1;
 
-        // Draw glowing badge disc on the top face
         if (!isFlyHide) {
-          const badgeR = 13 * Math.min(scalePara, scalePerp);
-          const badgeCol = hslToInt(wHue, 100, 45);
-          g.fillStyle(badgeCol, 0.9);
+          const badgeR = 14 * Math.min(scalePara, scalePerp);
+          const badgeCol = hslToInt(wHue, 100, 48);
+          g.fillStyle(badgeCol, 0.95);
           g.fillCircle(topCenter.x, topCenter.y, badgeR);
-          g.lineStyle(2, 0xffffff, 0.75);
+          g.lineStyle(2, 0xffffff, 0.85);
           g.strokeCircle(topCenter.x, topCenter.y, badgeR);
         }
 
@@ -284,9 +310,9 @@ export class LevelSelectScene extends Phaser.Scene {
           node.numTxt.setPosition(topCenter.x, topCenter.y).setAlpha(overlayAlpha);
         }
 
-        const starY = cy + bh + 18;
+        const starY = cy + bh + 20;
         node.starTxts?.forEach((stTxt, st) => {
-          stTxt.setPosition(cx + (st - 1) * 22, starY).setAlpha(overlayAlpha);
+          stTxt.setPosition(cx + (st - 1) * 24, starY).setAlpha(overlayAlpha);
         });
       } else {
         const topCenter = tPt(cx, cy - th * 0.55);
@@ -295,7 +321,7 @@ export class LevelSelectScene extends Phaser.Scene {
         }
       }
 
-      // Draw active skin hat if unlocked
+      // Draw hat if unlocked
       if (node.unlocked && node.state !== 'launch') {
         drawHat(g, cx, cy, tw, th, this.activeSkin, this.time.now, transformer);
       }
@@ -306,12 +332,12 @@ export class LevelSelectScene extends Phaser.Scene {
     const g = this.pathGfx;
     g.clear();
 
-    const worldColors: Record<number, number> = { 1: 0xff6eb4, 2: 0x6bcb77, 3: 0x74c0fc };
-    const col = worldColors[this.worldIndex] ?? 0x9b72ff;
+    const worldColors: Record<number, number> = { 1: 0xff85c1, 2: 0x6bcb77, 3: 0x74c0fc };
+    const col = worldColors[this.worldIndex] ?? 0xff9f1c;
 
     // Glow passes
     for (let pass = 0; pass < 3; pass++) {
-      g.lineStyle([6, 3.5, 1.5][pass], col, [0.15, 0.35, 0.75][pass]);
+      g.lineStyle([7, 4.5, 2][pass], col, [0.15, 0.35, 0.8][pass]);
       g.beginPath();
       g.moveTo(this.nodes[0].x, this.nodes[0].cy + BLOCK_H * 0.5);
       for (let i = 1; i < this.nodes.length; i++) {
@@ -320,8 +346,8 @@ export class LevelSelectScene extends Phaser.Scene {
       g.strokePath();
     }
 
-    // Inner bright neon line
-    g.lineStyle(1.5, 0xffffff, 0.85);
+    // Inner line
+    g.lineStyle(2, 0xffffff, 0.9);
     g.beginPath();
     g.moveTo(this.nodes[0].x, this.nodes[0].cy + BLOCK_H * 0.5);
     for (let i = 1; i < this.nodes.length; i++) {

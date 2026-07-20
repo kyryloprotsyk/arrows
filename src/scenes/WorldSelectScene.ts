@@ -2,7 +2,8 @@
 import Phaser from 'phaser';
 import { GameData } from '../utils/GameData';
 import { audio } from '../audio';
-import { hslToInt, createCartoonButton } from '../utils/IsoHelper';
+import { hslToInt, createCartoonButton, blendColor } from '../utils/IsoHelper';
+import { gsap } from 'gsap';
 
 const WORLDS = [
   { id: 1, name: 'Jelly Hills',    emoji: '🌸', hue: 330, desc: 'Sweet & simple puzzles',  starsNeeded: 0 },
@@ -20,30 +21,56 @@ export class WorldSelectScene extends Phaser.Scene {
     const W = this.scale.width, H = this.scale.height;
     const totalStars = GameData.totalStars();
 
-    // Dark bg
-    this.cameras.main.setBackgroundColor('#0a001a');
-    this.cameras.main.fadeIn(400, 10, 0, 26);
+    // Peach background to keep visual continuity
+    this.cameras.main.setBackgroundColor('#fff5ea');
+    this.cameras.main.fadeIn(400, 255, 245, 234);
 
-    // Animated starfield bg
-    this.addStarfield(W, H);
+    const bg = this.add.graphics();
+    bg.fillStyle(0xfff5ea, 1);
+    bg.fillRect(0, 0, W, H);
 
-    // Title
-    this.add.text(W / 2, H * 0.08, '🌍  Choose a World', {
-      fontFamily: 'Orbitron', fontSize: Math.min(W * 0.08, 38) + 'px',
-      color: '#ffffff',
-      shadow: { offsetX: 0, offsetY: 4, color: '#6600ff', blur: 18, fill: true }
-    }).setOrigin(0.5);
+    // Warm radial spots in bg
+    bg.fillStyle(0xffebd6, 0.6);
+    bg.fillCircle(W / 2, H * 0.35, W * 0.85);
 
-    // Stars total badge
-    this.add.text(W / 2, H * 0.15, `Total Stars: ${totalStars} ⭐`, {
-      fontFamily: 'Orbitron', fontSize: '18px', color: '#ffe45e'
-    }).setOrigin(0.5);
+    // Bubble floats
+    bg.fillStyle(0xffffff, 0.45);
+    for (let i = 0; i < 15; i++) {
+      bg.fillCircle(Math.random() * W, Math.random() * H, Math.random() * 25 + 10);
+    }
 
-    // Grid details
+    // Title (Fredoka, drop shadow, kid cartoon style)
+    const titleTxt = this.add.text(W / 2, H * 0.08, '🌍  Choose a World', {
+      fontFamily: 'Fredoka, sans-serif', fontSize: Math.min(W * 0.08, 34) + 'px',
+      color: '#ff9f1c', fontStyle: 'bold',
+      stroke: '#ffffff', strokeThickness: 5,
+      shadow: { offsetX: 0, offsetY: 4, color: '#5c3d2e', blur: 0, fill: true }
+    }).setOrigin(0.5).setAlpha(0);
+
+    gsap.to(titleTxt, {
+      alpha: 1,
+      y: H * 0.08,
+      duration: 0.5,
+      ease: 'back.out(1.5)',
+      delay: 0.1
+    });
+
+    // Stars total badge (Fredoka font)
+    const starsTxt = this.add.text(W / 2, H * 0.145, `Total Stars: ${totalStars} ⭐`, {
+      fontFamily: 'Fredoka, sans-serif', fontSize: '18px', color: '#e67e22', fontStyle: 'bold'
+    }).setOrigin(0.5).setAlpha(0);
+
+    gsap.to(starsTxt, {
+      alpha: 1,
+      duration: 0.4,
+      delay: 0.25
+    });
+
+    // Grid layout calculations
     const columns = W > 580 ? 2 : 1;
     const cardW = columns === 2 ? Math.min(W * 0.44, 380) : Math.min(W * 0.82, 420);
-    const cardH = columns === 2 ? Math.min(H * 0.20, 115) : Math.min(H * 0.10, 76);
-    const startY = H * 0.23;
+    const cardH = columns === 2 ? Math.min(H * 0.20, 115) : Math.min(H * 0.10, 78);
+    const startY = H * 0.22;
     const gapX = cardW + 16;
     const gapY = cardH + 14;
 
@@ -57,46 +84,48 @@ export class WorldSelectScene extends Phaser.Scene {
         cy = startY + row * gapY;
       }
       const unlocked = totalStars >= world.starsNeeded;
-      this.createWorldCard(cx, cy, cardW, cardH, world, unlocked, i * 90);
+      this.createWorldCard(cx, cy, cardW, cardH, world, unlocked, i * 80);
     });
 
-    // Back button
-    createCartoonButton(this, 75, 38, 100, 42, '◀ Back', () => {
+    // Back button (Pink Bubbly Cartoon button)
+    createCartoonButton(this, 75, 42, 100, 42, '◀ Back', () => {
       audio.playTap();
-      this.cameras.main.fadeOut(300, 10, 0, 26);
+      this.cameras.main.fadeOut(300, 255, 245, 234);
       this.time.delayedCall(320, () => this.scene.start('Menu'));
-    }, { bgColor: 0x9b72ff, fontSize: 16 });
+    }, { bgColor: 0xe91e63, fontSize: 16 });
   }
 
   private createWorldCard(
     x: number, y: number, w: number, h: number,
     world: typeof WORLDS[0], unlocked: boolean, delay: number
   ) {
-    const col  = hslToInt(world.hue, 80, 55);
-    const dark = hslToInt(world.hue, 70, 28);
-    const glow = hslToInt(world.hue, 100, 75);
+    const col  = hslToInt(world.hue, 85, 75); // bright cartoon cards
+    const dark = hslToInt(world.hue, 80, 52); // accent/border lines
+    const glow = hslToInt(world.hue, 100, 85);
 
-    // Create container offset by 6 vertically for the entrance animation
-    const container = this.add.container(x, y + 6).setAlpha(0).setDepth(1);
+    const container = this.add.container(x, y + 10).setAlpha(0).setDepth(1);
 
     const g = this.add.graphics();
     const draw = (hover: boolean) => {
       g.clear();
-      // Card shadow
-      g.fillStyle(dark, 0.4);
-      g.fillRoundedRect(-w / 2 + 4, -h / 2 + 6, w, h, 16);
+      
+      // Drop Shadow
+      g.fillStyle(0x000000, 0.03);
+      g.fillRoundedRect(-w / 2, -h / 2 + 5, w, h, 18);
+
       // Card bg
-      g.fillStyle(unlocked ? (hover ? col : hslToInt(world.hue, 70, 32)) : 0x221133, 1);
-      g.fillRoundedRect(-w / 2, -h / 2, w, h, 16);
-      // Glow border
-      for (let pass = 0; pass < 3; pass++) {
-        g.lineStyle([5, 3, 1.5][pass], unlocked ? glow : 0x443355, [0.1, 0.3, unlocked ? 0.7 : 0.3][pass]);
-        g.strokeRoundedRect(-w / 2, -h / 2, w, h, 16);
-      }
-      // Lock icon bg
+      const bgCol = unlocked ? (hover ? blendColor(col, 0xffffff, 0.15) : col) : 0xffffff;
+      g.fillStyle(bgCol, 1);
+      g.fillRoundedRect(-w / 2, -h / 2, w, h, 18);
+
+      // Borders
+      g.lineStyle(isSelected = hover ? 3.5 : 2, unlocked ? dark : 0xffd8b3, 1.0);
+      g.strokeRoundedRect(-w / 2, -h / 2, w, h, 18);
+
       if (!unlocked) {
-        g.fillStyle(0x000000, 0.3);
-        g.fillRoundedRect(-w / 2, -h / 2, w, h, 16);
+        // Semitransparent lock layer
+        g.fillStyle(0xffffff, 0.45);
+        g.fillRoundedRect(-w / 2, -h / 2, w, h, 18);
       }
     };
     draw(false);
@@ -114,17 +143,20 @@ export class WorldSelectScene extends Phaser.Scene {
     const emoji = this.add.text(emojiX, 0, world.emoji, { fontSize: emojiSize })
       .setOrigin(0.5);
 
-    // World name
+    // World name (Fredoka font)
     const nameText = this.add.text(textX, -textYOffset, world.name, {
-      fontFamily: 'Orbitron', fontSize: titleSize,
-      color: unlocked ? '#ffffff' : '#664477',
-      shadow: unlocked ? { offsetX: 0, offsetY: 2, color: '#000', blur: 6, fill: true } : undefined
+      fontFamily: 'Fredoka, sans-serif', fontSize: titleSize,
+      color: unlocked ? '#ffffff' : '#bdc3c7',
+      fontStyle: 'bold',
+      stroke: unlocked ? '#000000' : undefined,
+      strokeThickness: unlocked ? 1.5 : undefined
     }).setOrigin(0, 0.5);
 
-    // Description / lock notice
+    // Description / lock notice (Fredoka font)
     const descText = this.add.text(textX, textYOffset, unlocked ? world.desc : `🔒 Need ${world.starsNeeded} Stars`, {
-      fontFamily: 'Orbitron', fontSize: descSize,
-      color: unlocked ? '#ccbbee' : '#664477'
+      fontFamily: 'Fredoka, sans-serif', fontSize: descSize,
+      color: unlocked ? blendColor(col, 0x000000, 0.45) : '#bdc3c7',
+      fontStyle: 'bold'
     }).setOrigin(0, 0.5);
 
     // Level stars row
@@ -143,7 +175,7 @@ export class WorldSelectScene extends Phaser.Scene {
     container.add([g, emoji, nameText, descText, ...starTexts]);
 
     if (unlocked) {
-      container.setSize(w, h).setInteractive({
+      container.setInteractive({
         hitArea: new Phaser.Geom.Rectangle(-w / 2, -h / 2, w, h),
         hitAreaCallback: Phaser.Geom.Rectangle.Contains,
         useHandCursor: true
@@ -151,27 +183,16 @@ export class WorldSelectScene extends Phaser.Scene {
       
       container.on('pointerover', () => {
         draw(true);
-        this.tweens.add({
-          targets: container,
-          scale: 1.04,
-          duration: 150,
-          ease: 'Quad.easeOut',
-          overwrite: true
-        });
+        gsap.to(container, { scale: 1.04, duration: 0.15, overwrite: 'auto' });
       });
       container.on('pointerout',  () => {
         draw(false);
-        this.tweens.add({
-          targets: container,
-          scale: 1.0,
-          duration: 150,
-          ease: 'Quad.easeOut',
-          overwrite: true
-        });
+        gsap.to(container, { scale: 1.0, duration: 0.15, overwrite: 'auto' });
       });
       container.on('pointerdown', () => {
         audio.playTap();
-        this.cameras.main.fadeOut(300, 10, 0, 26);
+        gsap.to(container, { scale: 0.96, duration: 0.05, yoyo: true, repeat: 1 });
+        this.cameras.main.fadeOut(300, 255, 245, 234);
         this.time.delayedCall(320, () => {
           GameData.world.set(world.id);
           this.scene.start('LevelSelect', { world: world.id });
@@ -179,35 +200,27 @@ export class WorldSelectScene extends Phaser.Scene {
       });
     }
 
-    // Entrance animation
-    this.tweens.add({
-      targets: container,
+    // GSAP entrance cascade
+    gsap.to(container, {
       alpha: 1,
       y: y,
-      duration: 500,
-      ease: 'Back.Out',
-      delay
+      duration: 0.5,
+      ease: 'back.out(1.5)',
+      delay: delay / 1000
     });
 
-    // Idle float
+    // Gentle GSAP idle float
     if (unlocked) {
-      this.tweens.add({
-        targets: container,
-        y: y - 4,
-        duration: 1800 + delay,
-        yoyo: true,
-        repeat: -1,
-        ease: 'Sine.InOut',
-        delay: 900 + delay
+      this.time.delayedCall(500 + delay, () => {
+        gsap.to(container, {
+          y: y - 4,
+          duration: 1.8,
+          yoyo: true,
+          repeat: -1,
+          ease: 'sine.inOut'
+        });
       });
     }
   }
-
-  private addStarfield(W: number, H: number) {
-    const gfx = this.add.graphics();
-    for (let i = 0; i < 80; i++) {
-      gfx.fillStyle(0xffffff, 0.3 + Math.random() * 0.5);
-      gfx.fillCircle(Math.random() * W, Math.random() * H, Math.random() * 1.2 + 0.3);
-    }
-  }
 }
+let isSelected = false;

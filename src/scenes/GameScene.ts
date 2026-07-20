@@ -155,8 +155,8 @@ export class GameScene extends Phaser.Scene {
     // Fade in
     this.cameras.main.fadeIn(400, 10, 0, 26);
 
-    // BGM
-    if (!GameData.muted.get()) audio.playBGM();
+    // BGM — world-specific theme
+    if (!GameData.muted.get()) audio.playBGM(this.worldIndex);
 
     // ── Responsive: redraw background on orientation / resize ────────────
     this.scale.on('resize', (gs: Phaser.Structs.Size) => {
@@ -239,6 +239,9 @@ export class GameScene extends Phaser.Scene {
     this.cameras.main.zoomTo(1, 900, 'Quad.easeOut');
 
     this.updateHUD();
+
+    // Level start jingle
+    if (!GameData.muted.get()) audio.playLevelStart();
 
     // Tutorial tip
     this.showTutorial(world, level);
@@ -701,6 +704,9 @@ export class GameScene extends Phaser.Scene {
       this.time.delayedCall(1500, () => {
         if (this.buddies.some(b => b.state !== 'escaping')) {
           this.triggerHaptic([100, 50, 100]);
+          audio.stopBGM();
+          audio.playDefeat();
+          audio.setBGMIntensity(0);
           this.scene.pause();
           this.scene.launch('Defeat', { world: this.worldIndex, level: this.levelIndex, isDaily: this.isDaily });
         }
@@ -1250,6 +1256,35 @@ export class GameScene extends Phaser.Scene {
     const scaleX = scalePara * Math.abs(cos) + scalePerp * Math.abs(sin);
     const scaleY = scalePara * Math.abs(sin) + scalePerp * Math.abs(cos);
 
+    // Draw transformed stubby legs and side arms if it's a character block
+    if (b.type !== 'chest' && b.type !== 'portal') {
+      // Left leg (using left face color)
+      g.fillStyle(left, 1.0);
+      const ll1 = tPt(cx - 9, cy + 19.5);
+      const ll2 = tPt(cx - 9, cy + 27.5);
+      g.lineStyle(8 * scaleX, left, 1.0);
+      g.beginPath(); g.moveTo(ll1.x, ll1.y); g.lineTo(ll2.x, ll2.y); g.strokePath();
+
+      // Right leg (using left/shaded face color)
+      g.fillStyle(left, 1.0);
+      const rl1 = tPt(cx + 9, cy + 19.5);
+      const rl2 = tPt(cx + 9, cy + 27.5);
+      g.lineStyle(8 * scaleX, left, 1.0);
+      g.beginPath(); g.moveTo(rl1.x, rl1.y); g.lineTo(rl2.x, rl2.y); g.strokePath();
+
+      // Left arm (pointing down-left, using left face color)
+      const la1 = tPt(cx - 22, cy + 8);
+      const la2 = tPt(cx - 29, cy + 14);
+      g.lineStyle(9 * scaleX, left, 1.0);
+      g.beginPath(); g.moveTo(la1.x, la1.y); g.lineTo(la2.x, la2.y); g.strokePath();
+
+      // Right arm (pointing down-right, using right face color)
+      const ra1 = tPt(cx + 22, cy + 8);
+      const ra2 = tPt(cx + 29, cy + 14);
+      g.lineStyle(9 * scaleX, right, 1.0);
+      g.beginPath(); g.moveTo(ra1.x, ra1.y); g.lineTo(ra2.x, ra2.y); g.strokePath();
+    }
+
     drawIsoCube(g, cx, cy, top, left, right, glow, glowAlpha, transformer, this.worldIndex, this.time.now);
 
     // Type-specific overlays
@@ -1403,33 +1438,38 @@ export class GameScene extends Phaser.Scene {
         g.closePath();
         g.fillPath();
       } else if (isHovered) {
-        // Shocked / wide open eyes in anticipation
-        g.fillStyle(0x111111, 1);
+        // Shocked / wide open eyes in anticipation with glowing neon ring
+        g.lineStyle(2.0 * Math.min(scaleX, scaleY), glow, 0.95);
         const le = tPt(cx - 10, eyeY);
         const re = tPt(cx + 10, eyeY);
-        g.fillCircle(le.x, le.y, 6.0 * Math.min(scaleX, scaleY));
-        g.fillCircle(re.x, re.y, 6.0 * Math.min(scaleX, scaleY));
+        g.strokeCircle(le.x, le.y, 6.2 * Math.min(scaleX, scaleY));
+        g.strokeCircle(re.x, re.y, 6.2 * Math.min(scaleX, scaleY));
 
-        g.fillStyle(0xffffff, 1);
-        g.fillCircle(le.x, le.y, 4.5 * Math.min(scaleX, scaleY));
-        g.fillCircle(re.x, re.y, 4.5 * Math.min(scaleX, scaleY));
+        g.fillStyle(0x220516, 1);
+        g.fillCircle(le.x, le.y, 5.2 * Math.min(scaleX, scaleY));
+        g.fillCircle(re.x, re.y, 5.2 * Math.min(scaleX, scaleY));
 
-        // Center pupils slightly looking towards path
-        g.fillStyle(0x111111, 1);
-        const lp = tPt(cx - 10 + lox * 0.7, eyeY + loy * 0.7);
-        const rp = tPt(cx + 10 + lox * 0.7, eyeY + loy * 0.7);
-        g.fillCircle(lp.x, lp.y, 2.5 * Math.min(scaleX, scaleY));
-        g.fillCircle(rp.x, rp.y, 2.5 * Math.min(scaleX, scaleY));
+        // Double shine highlights
+        g.fillStyle(0xffffff, 1.0);
+        const lhl1 = tPt(cx - 10 - 1.5 + lox * 0.7, eyeY - 1.5 + loy * 0.7);
+        const lhl2 = tPt(cx - 10 + 1.5 + lox * 0.7, eyeY + 1.5 + loy * 0.7);
+        g.fillCircle(lhl1.x, lhl1.y, 1.8 * Math.min(scaleX, scaleY));
+        g.fillCircle(lhl2.x, lhl2.y, 0.8 * Math.min(scaleX, scaleY));
+
+        const rhl1 = tPt(cx + 10 - 1.5 + lox * 0.7, eyeY - 1.5 + loy * 0.7);
+        const rhl2 = tPt(cx + 10 + 1.5 + lox * 0.7, eyeY + 1.5 + loy * 0.7);
+        g.fillCircle(rhl1.x, rhl1.y, 1.8 * Math.min(scaleX, scaleY));
+        g.fillCircle(rhl2.x, rhl2.y, 0.8 * Math.min(scaleX, scaleY));
 
         // Open circular O-mouth
-        g.fillStyle(0x111111, 1);
-        const m = tPt(cx, eyeY + 9);
-        g.fillCircle(m.x, m.y, 3.5 * Math.min(scaleX, scaleY));
+        g.fillStyle(0x220516, 1);
+        const m = tPt(cx, eyeY + 8.5);
+        g.fillCircle(m.x, m.y, 2.5 * Math.min(scaleX, scaleY));
       } else {
         // Idle / Normal blinking & looking
         if (b.isBlinking) {
           // Closed eyelid line
-          g.lineStyle(2.5 * Math.min(scaleX, scaleY), 0x111111, 1);
+          g.lineStyle(2.5 * Math.min(scaleX, scaleY), 0x220516, 1);
           const le1 = tPt(cx - 14, eyeY);
           const le2 = tPt(cx - 6, eyeY);
           const re1 = tPt(cx + 6, eyeY);
@@ -1439,26 +1479,36 @@ export class GameScene extends Phaser.Scene {
           g.moveTo(re1.x, re1.y); g.lineTo(re2.x, re2.y);
           g.strokePath();
         } else {
-          // Open eye ellipses
-          g.fillStyle(0x111111, 1);
+          // Glowing neon ring outer outline
+          g.lineStyle(1.8 * Math.min(scaleX, scaleY), glow, 0.95);
           const le = tPt(cx - 10, eyeY);
           const re = tPt(cx + 10, eyeY);
-          g.fillEllipse(le.x, le.y, 8.5 * scaleX, 7.5 * scaleY);
-          g.fillEllipse(re.x, re.y, 8.5 * scaleX, 7.5 * scaleY);
+          g.strokeCircle(le.x, le.y, 5.0 * Math.min(scaleX, scaleY));
+          g.strokeCircle(re.x, re.y, 5.0 * Math.min(scaleX, scaleY));
 
-          // White gloss pupil highlight offset in target arrow direction
-          g.fillStyle(0xffffff, 0.85);
-          const lhl = tPt(cx - 10 + lox, eyeY - 1.2 + loy);
-          const rhl = tPt(cx + 10 + lox, eyeY - 1.2 + loy);
-          g.fillCircle(lhl.x, lhl.y, 2.2 * Math.min(scaleX, scaleY));
-          g.fillCircle(rhl.x, rhl.y, 2.2 * Math.min(scaleX, scaleY));
+          // Dark pupil
+          g.fillStyle(0x220516, 1.0);
+          g.fillCircle(le.x, le.y, 4.0 * Math.min(scaleX, scaleY));
+          g.fillCircle(re.x, re.y, 4.0 * Math.min(scaleX, scaleY));
 
-          // Cute pink blush circles
-          g.fillStyle(0xff79a8, 0.45);
-          const lc = tPt(cx - 16, eyeY + 4);
-          const rc = tPt(cx + 16, eyeY + 4);
-          g.fillEllipse(lc.x, lc.y, 9.5 * scaleX, 4.5 * scaleY);
-          g.fillEllipse(rc.x, rc.y, 9.5 * scaleX, 4.5 * scaleY);
+          // Double shine highlights
+          g.fillStyle(0xffffff, 1.0);
+          const lhl1 = tPt(cx - 10 - 1 + lox * 0.7, eyeY - 1 + loy * 0.7);
+          const lhl2 = tPt(cx - 10 + 1 + lox * 0.7, eyeY + 1 + loy * 0.7);
+          g.fillCircle(lhl1.x, lhl1.y, 1.3 * Math.min(scaleX, scaleY));
+          g.fillCircle(lhl2.x, lhl2.y, 0.6 * Math.min(scaleX, scaleY));
+
+          const rhl1 = tPt(cx + 10 - 1 + lox * 0.7, eyeY - 1 + loy * 0.7);
+          const rhl2 = tPt(cx + 10 + 1 + lox * 0.7, eyeY + 1 + loy * 0.7);
+          g.fillCircle(rhl1.x, rhl1.y, 1.3 * Math.min(scaleX, scaleY));
+          g.fillCircle(rhl2.x, rhl2.y, 0.6 * Math.min(scaleX, scaleY));
+
+          // Blush circles matching theme glow color
+          g.fillStyle(glow, 0.42);
+          const lc = tPt(cx - 15, eyeY + 4);
+          const rc = tPt(cx + 15, eyeY + 4);
+          g.fillEllipse(lc.x, lc.y, 7 * scaleX, 3.2 * scaleY);
+          g.fillEllipse(rc.x, rc.y, 7 * scaleX, 3.2 * scaleY);
         }
 
         // Curved smile
@@ -1467,7 +1517,7 @@ export class GameScene extends Phaser.Scene {
         const s2 = tPt(cx, eyeY + 10.5);
         const s2m = tPt(cx + 2.5, eyeY + 9.5);
         const s3 = tPt(cx + 5, eyeY + 7);
-        g.lineStyle(2, 0x333333, 0.85);
+        g.lineStyle(2, 0x220516, 0.85);
         g.beginPath();
         g.moveTo(s1.x, s1.y);
         g.lineTo(s1m.x, s1m.y);
@@ -1766,6 +1816,9 @@ export class GameScene extends Phaser.Scene {
     this.triggerHaptic([80, 50, 80, 50, 150]);
     audio.stopBGM();
     audio.playVictory();
+    // Delay star jingle slightly so it lands on the card reveal
+    const starCount = this.calcStars();
+    this.time.delayedCall(320, () => { if (!GameData.muted.get()) audio.playStarEarn(starCount as 1|2|3); });
     this.spawnVictoryConfetti();
 
     this.cameras.main.flash(800, 255, 255, 255, false);
@@ -1951,6 +2004,9 @@ export class GameScene extends Phaser.Scene {
       this.coins += bonus;
       this.updateHUD();
       this.cameras.main.shake(140, 0.005 * Math.min(this.comboCount, 4));
+      if (!GameData.muted.get()) audio.playComboFanfare(this.comboCount);
+      // Kick in the arp layer on a hot streak
+      audio.setBGMIntensity(this.comboCount >= 3 ? 2 : 1);
     }
   }
 

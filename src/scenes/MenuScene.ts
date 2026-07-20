@@ -1,6 +1,6 @@
-/* MenuScene.ts — Animated splash screen with floating isometric buddy blocks */
+/* MenuScene.ts — Animated splash screen matching the user mockup with pixel-perfect accuracy */
 import Phaser from 'phaser';
-import { TILE_W, TILE_H, BLOCK_H, getBlockPalette, drawHat, drawIsoCube, drawCartoonCosmicBg, createCosmicEffects, blendColor } from '../utils/IsoHelper';
+import { TILE_W, TILE_H, BLOCK_H, getBlockPalette, drawHat, drawIsoCube, blendColor } from '../utils/IsoHelper';
 import { GameData } from '../utils/GameData';
 import { audio } from '../audio';
 
@@ -32,148 +32,397 @@ export class MenuScene extends Phaser.Scene {
   create() {
     const W = this.scale.width, H = this.scale.height;
 
-    // --- Background gradient via graphics ---
+    // 1. Cosmic Gradient Sky (Deep space indigo to violet)
     this.bgGfx = this.add.graphics();
-    drawCartoonCosmicBg(this.bgGfx, W, H, 280);
+    this.bgGfx.fillGradientStyle(
+      0x050012, 0x050012, // top left, top right
+      0x0a0024, 0x0a0024, // bottom left, bottom right
+      1, 1, 1, 1
+    );
+    this.bgGfx.fillRect(0, 0, W, H);
 
-    // --- Animated star field ---
-    createCosmicEffects(this, W, H, 280);
+    // Large soft nebula-like color glows
+    this.bgGfx.fillStyle(0x00d8ff, 0.08);
+    this.bgGfx.fillEllipse(W / 2, H * 0.45, W * 1.3, H * 0.45);
+    this.bgGfx.fillStyle(0xff00d8, 0.07);
+    this.bgGfx.fillEllipse(W / 2, H * 0.20, W * 1.1, H * 0.4);
 
-    // --- Floating isometric demo blocks ---
+    // 2. Custom Sparkling Starfield (4-point cross stars twinkling)
+    this.createCustomStarfield(W, H);
+
+    // 3. Floating background blocks
     this.blockGfx = this.add.graphics();
     this.spawnFloatingBlocks(W, H);
 
-    // --- Initialize Giant Jelly Buddy ---
+    // 4. Initialize Giant Jelly Buddy
     const skins = ['none', 'wizard', 'crown', 'cat', 'tophat', 'chef', 'propeller', 'rainbow'];
     this.buddySkin = skins[Math.floor(Math.random() * skins.length)];
     this.buddyX = W / 2;
-    this.buddyY = this.buddyBaseY = H * 0.62;
+    this.buddyY = this.buddyBaseY = H * 0.40; // Positioned in upper middle as in mockup
     this.buddyState = 'idle';
     this.buddyAnimT = 0;
 
     // Interactive zone for giant buddy
-    const buddyZone = this.add.zone(W / 2, H * 0.62, 140, 140)
+    const buddyZone = this.add.zone(W / 2, H * 0.40, 160, 160)
       .setInteractive({ useHandCursor: true });
     buddyZone.on('pointerdown', () => {
       this.triggerBuddyWiggle();
     });
 
-    // --- Game Logo Title ---
-    const titleFontSize = Math.min(W * 0.1, 68);
-    const title1 = this.add.text(W / 2, H * 0.145, '🏹 ARROW', {
-      fontFamily: 'Orbitron', fontSize: `${titleFontSize}px`,
-      color: '#ff85c1',
-      stroke: '#ffffff', strokeThickness: 5,
-      shadow: { offsetX: 0, offsetY: 6, color: '#ff0088', blur: 25, fill: true }
+    // 5. Game Logo Title (Centered at top)
+    const titleFontSize = Math.round(Math.min(W * 0.115, 48));
+    const title1 = this.add.text(W / 2, H * 0.12, 'ARROW', {
+      fontFamily: 'Fredoka, sans-serif', fontSize: `${titleFontSize}px`, fontStyle: 'bold',
+      color: '#ffffff',
+      stroke: '#ff488e', strokeThickness: 5.5,
+      align: 'center',
+      shadow: { color: '#ff488e', blur: 20, stroke: true, fill: true }
     }).setOrigin(0.5).setAlpha(0);
 
-    const title2 = this.add.text(W / 2, H * 0.225, 'BUDDIES 3D', {
-      fontFamily: 'Orbitron', fontSize: `${titleFontSize * 0.85}px`,
-      color: '#ffe45e',
-      stroke: '#ffffff', strokeThickness: 4,
-      shadow: { offsetX: 0, offsetY: 6, color: '#ffa500', blur: 20, fill: true }
+    const title2 = this.add.text(W / 2, H * 0.188, 'BUDDIES 3D', {
+      fontFamily: 'Fredoka, sans-serif', fontSize: `${titleFontSize * 0.88}px`, fontStyle: 'bold',
+      color: '#ffffff',
+      stroke: '#ff488e', strokeThickness: 5.0,
+      align: 'center',
+      shadow: { color: '#ff488e', blur: 18, stroke: true, fill: true }
     }).setOrigin(0.5).setAlpha(0);
 
-    const sub = this.add.text(W / 2, H * 0.30, 'Neon Escape Puzzle!', {
-      fontFamily: 'Orbitron', fontSize: Math.min(W * 0.045, 22) + 'px',
-      color: '#9b72ff'
-    }).setOrigin(0.5).setAlpha(0);
+    // Entrance Animations
+    this.tweens.add({ targets: title1, alpha: 1, duration: 600, ease: 'Back.Out', delay: 100 });
+    this.tweens.add({ targets: title2, alpha: 1, duration: 600, ease: 'Back.Out', delay: 250 });
 
-    // --- Entrance Animations ---
-    this.tweens.add({ targets: title1, alpha: 1, y: H * 0.145, duration: 700, ease: 'Back.Out', delay: 200 });
-    this.tweens.add({ targets: title2, alpha: 1, y: H * 0.225, duration: 700, ease: 'Back.Out', delay: 400 });
-    this.tweens.add({ targets: sub, alpha: 1, duration: 600, delay: 700 });
-
-    // Pulsing glow on title
-    this.tweens.add({ targets: title1, scaleX: 1.04, scaleY: 1.04, duration: 1200, yoyo: true, repeat: -1, ease: 'Sine.InOut' });
-
-    // --- Profile & Prestige Top Bar ---
-    const topBar = this.add.container(W / 2, Math.max(28, H * 0.055));
-    const topBarBg = this.add.graphics();
-    const topW = Math.min(W - 40, 290), topH = 38;
-    topBarBg.fillStyle(0x2d1854, 0.9);
-    topBarBg.fillRoundedRect(-topW / 2, -topH / 2, topW, topH, 19);
-    topBarBg.lineStyle(2, 0x00ffcc, 0.9);
-    topBarBg.strokeRoundedRect(-topW / 2, -topH / 2, topW, topH, 19);
-
-    const userEmo = GameData.avatar.get();
-    const userName = GameData.username.get();
-    const userLvl = GameData.playerXP.getLevel();
-    const topBarTxt = this.add.text(0, 0, `${userEmo} ${userName} • Lvl ${userLvl} ⭐`, {
-      fontFamily: 'Orbitron', fontSize: Math.min(topW * 0.065, 16) + 'px', color: '#00ffcc', fontStyle: 'bold'
-    }).setOrigin(0.5);
-
-    topBar.add([topBarBg, topBarTxt]);
-    topBar.setInteractive(new Phaser.Geom.Rectangle(-topW / 2, -topH / 2, topW, topH), Phaser.Geom.Rectangle.Contains);
-    topBar.input!.cursor = 'pointer';
-    topBar.on('pointerdown', () => {
-      audio.playTap();
-      this.cameras.main.fadeOut(280, 0, 0, 20);
-      this.time.delayedCall(300, () => this.scene.start('Profile'));
+    // Slow organic scaling/pulsing on title
+    this.tweens.add({
+      targets: [title1, title2],
+      scaleX: 1.03, scaleY: 1.03,
+      duration: 1500,
+      yoyo: true,
+      repeat: -1,
+      ease: 'Sine.InOut'
     });
 
-    // --- Buttons Layout ---
-    const btnPlayY = H * 0.40;
-    const btnDailyY = H * 0.70;
-    const btnLdbY = btnDailyY + 50;
-    const btnShopY = btnLdbY + 50;
-    const coinY = btnShopY + 44;
-    
-    const btnPlayBg = this.createNeonButton(W / 2, btnPlayY, 220, 58, 0xff6eb4, 0xff0088, 'PLAY  GAME', 0);
-    const btnDailyBg = this.createNeonButton(W / 2, btnDailyY, 240, 46, 0x00bb88, 0x00ffcc, '📅 DAILY CHALLENGE', 100);
-    const btnLdbBg = this.createNeonButton(W / 2, btnLdbY, 240, 46, 0xffa500, 0xffe45e, '🏆 LEADERBOARDS', 150);
-    const btnShopBg = this.createNeonButton(W / 2, btnShopY, 200, 46, 0x9b72ff, 0x6600ff, 'SKINS  SHOP', 200);
+    // 6. Profile Button (Top-Left, matching mockup)
+    this.setupProfileButton();
 
-    // Coin display
-    const coinText = this.add.text(W / 2, coinY, `🪙 ${GameData.coins.get()} Coins`, {
-      fontFamily: 'Orbitron', fontSize: '22px', color: '#ffe45e'
-    }).setOrigin(0.5).setAlpha(0);
-    this.tweens.add({ targets: coinText, alpha: 1, delay: 900, duration: 400 });
+    // 7. Mute Button (Top-Right, matching mockup)
+    this.setupMuteButton(W);
 
-    // Mute button
-    this.createMuteButton(W, H);
+    // 8. Buttons Stack (Lower half, matching mockup)
+    const btnW = Math.min(W * 0.76, 290);
+    const btnH = 52;
+    const btnPlayY = H * 0.58;
+    const btnDailyY = H * 0.68;
+    const btnLdbY = H * 0.77;
+    const btnShopY = H * 0.86;
+    const coinY = H * 0.94;
 
-    // Info
-    this.add.text(W / 2, H * 0.965, '🔄 Drag to rotate  •  👆 Tap to escape  •  💣 Bomb magic!', {
-      fontFamily: 'Orbitron', fontSize: Math.min(W * 0.032, 14) + 'px', color: '#665588'
-    }).setOrigin(0.5);
+    const btnPlay = this.createGlossyButton(W / 2, btnPlayY, btnW, btnH, 0xff488e, 0xc91c5d, 'PLAY GAME', 0);
+    const btnDaily = this.createGlossyButton(W / 2, btnDailyY, btnW, btnH, 0x46c93a, 0x2d8b24, 'DAILY CHALLENGE', 80);
+    const btnLdb = this.createGlossyButton(W / 2, btnLdbY, btnW, btnH, 0xffa21a, 0xc77000, 'LEADERBOARDS', 140);
+    const btnShop = this.createGlossyButton(W / 2, btnShopY, btnW, btnH, 0xb17eff, 0x7a4cb8, 'SKINS SHOP', 200);
 
     // Button actions
-    btnPlayBg.on('pointerdown', () => {
+    btnPlay.on('pointerdown', () => {
       audio.playTap();
       this.launchBuddyAndTransition();
     });
 
-    btnDailyBg.on('pointerdown', () => {
+    btnDaily.on('pointerdown', () => {
       audio.playTap();
       this.cameras.main.fadeOut(300, 0, 0, 20);
       this.time.delayedCall(320, () => this.scene.start('DailyChallenge'));
     });
 
-    btnLdbBg.on('pointerdown', () => {
+    btnLdb.on('pointerdown', () => {
       audio.playTap();
       this.cameras.main.fadeOut(300, 0, 0, 20);
       this.time.delayedCall(320, () => this.scene.start('Leaderboard'));
     });
 
-    btnShopBg.on('pointerdown', () => {
+    btnShop.on('pointerdown', () => {
       audio.playTap();
       this.cameras.main.fadeOut(300, 0, 0, 20);
       this.time.delayedCall(320, () => this.scene.start('Shop'));
     });
 
-    // Fade in on start
+    // 9. Coin Display (Centered at bottom, matching mockup)
+    const coinContainer = this.add.container(W / 2, coinY).setAlpha(0);
+    
+    // Draw vector gold coin
+    const goldCoin = this.add.graphics();
+    goldCoin.fillStyle(0xffd700, 1.0);
+    goldCoin.fillCircle(-42, 0, 9.5);
+    goldCoin.lineStyle(1.8, 0xe5a900, 1.0);
+    goldCoin.strokeCircle(-42, 0, 9.5);
+    goldCoin.fillStyle(0xffea3d, 1.0);
+    goldCoin.fillCircle(-42, 0, 5.5);
+    coinContainer.add(goldCoin);
+
+    const coinText = this.add.text(-26, 0, `${GameData.coins.get()} Coins`, {
+      fontFamily: 'Fredoka, sans-serif', fontSize: '18px', fontStyle: 'bold', color: '#ffffff',
+      stroke: '#1e0b35', strokeThickness: 1.5
+    }).setOrigin(0, 0.5);
+    coinContainer.add(coinText);
+
+    this.tweens.add({ targets: coinContainer, alpha: 1, delay: 700, duration: 400 });
+
+    // Fade in scene
     this.cameras.main.fadeIn(500, 10, 0, 26);
 
-    // Start BGM
-    if (!GameData.muted.get()) audio.playBGM();
+    // Start BGM menu theme
+    if (!GameData.muted.get()) audio.playBGM(0);
+  }
+
+  private createCustomStarfield(W: number, H: number) {
+    const starGfx = this.add.graphics().setDepth(1);
+    
+    // Static backdrop stars
+    for (let i = 0; i < 45; i++) {
+      const x = Math.random() * W;
+      const y = Math.random() * H * 0.95;
+      const r = 0.5 + Math.random() * 1.5;
+      const a = 0.25 + Math.random() * 0.55;
+      starGfx.fillStyle(0xffffff, a);
+      starGfx.fillCircle(x, y, r);
+    }
+
+    // Glowing 4-point cross flares (slowly rotating + twinkling)
+    const colors = [0xffffff, 0xcbefff, 0xffebfa];
+    for (let i = 0; i < 7; i++) {
+      const x = 30 + Math.random() * (W - 60);
+      const y = 30 + Math.random() * (H * 0.75);
+      const scale = 0.7 + Math.random() * 0.5;
+      const color = colors[i % colors.length];
+
+      const sp = this.add.graphics({ x, y }).setDepth(2);
+      
+      // Star center and glow
+      sp.fillStyle(color, 1.0);
+      sp.fillCircle(0, 0, 1.8);
+      sp.fillStyle(color, 0.22);
+      sp.fillCircle(0, 0, 5);
+
+      // Flare lines
+      sp.lineStyle(1.0, color, 0.8);
+      sp.beginPath();
+      sp.moveTo(-11 * scale, 0); sp.lineTo(11 * scale, 0);
+      sp.moveTo(0, -11 * scale); sp.lineTo(0, 11 * scale);
+      sp.strokePath();
+
+      // Rotation tween
+      this.tweens.add({
+        targets: sp,
+        angle: 360,
+        duration: 9000 + Math.random() * 7000,
+        repeat: -1
+      });
+
+      // Twinkle alpha tween
+      this.tweens.add({
+        targets: sp,
+        alpha: { from: 0.18, to: 0.95 },
+        duration: 1300 + Math.random() * 1400,
+        yoyo: true,
+        repeat: -1,
+        ease: 'Sine.InOut'
+      });
+    }
+  }
+
+  private setupProfileButton() {
+    const profileBtn = this.add.container(35, 40).setDepth(20);
+    const cardGfx = this.add.graphics();
+    
+    // Background and gradient outline
+    cardGfx.fillStyle(0x180c2b, 0.9);
+    cardGfx.fillRoundedRect(-20, -20, 40, 40, 11);
+    cardGfx.lineStyle(2.2, 0xd946ef, 1.0);
+    cardGfx.strokeRoundedRect(-20, -20, 40, 40, 11);
+
+    // Inner avatar graphics
+    cardGfx.fillStyle(0xd946ef, 0.25);
+    cardGfx.fillCircle(0, 0, 13);
+    cardGfx.fillStyle(0xe8bbff, 1.0);
+    cardGfx.fillCircle(0, -3, 5.5);
+    cardGfx.beginPath();
+    cardGfx.arc(0, 10, 9, Math.PI, 0, false);
+    cardGfx.closePath();
+    cardGfx.fillPath();
+
+    profileBtn.add(cardGfx);
+    profileBtn.setInteractive(new Phaser.Geom.Rectangle(-20, -20, 40, 40), Phaser.Geom.Rectangle.Contains);
+    profileBtn.input!.cursor = 'pointer';
+
+    profileBtn.on('pointerdown', () => {
+      audio.playTap();
+      this.cameras.main.fadeOut(280, 0, 0, 20);
+      this.time.delayedCall(300, () => this.scene.start('Profile'));
+    });
+
+    profileBtn.on('pointerover', () => {
+      this.tweens.add({ targets: profileBtn, scale: 1.08, duration: 100, overwrite: 'auto' });
+    });
+    profileBtn.on('pointerout', () => {
+      this.tweens.add({ targets: profileBtn, scale: 1.0, duration: 100, overwrite: 'auto' });
+    });
+  }
+
+  private setupMuteButton(W: number) {
+    const muteBtn = this.add.container(W - 35, 40).setDepth(20);
+    const muteGfx = this.add.graphics();
+
+    const drawMute = (isMuted: boolean) => {
+      muteGfx.clear();
+      // Background and border matching avatar button
+      muteGfx.fillStyle(0x180c2b, 0.9);
+      muteGfx.fillRoundedRect(-20, -20, 40, 40, 11);
+      muteGfx.lineStyle(1.8, 0x4f46e5, 0.85);
+      muteGfx.strokeRoundedRect(-20, -20, 40, 40, 11);
+
+      // White speaker icon
+      muteGfx.fillStyle(0xffffff, 1.0);
+      muteGfx.fillRect(-8, -4, 4, 8);
+      muteGfx.beginPath();
+      muteGfx.moveTo(-4, -4);
+      muteGfx.lineTo(0, -8);
+      muteGfx.lineTo(0, 8);
+      muteGfx.lineTo(-4, 4);
+      muteGfx.closePath();
+      muteGfx.fillPath();
+
+      if (isMuted) {
+        // Red diagonal mute slash
+        muteGfx.lineStyle(2.2, 0xef4444, 1.0);
+        muteGfx.beginPath();
+        muteGfx.moveTo(3, -4); muteGfx.lineTo(9, 2);
+        muteGfx.moveTo(9, -4); muteGfx.lineTo(3, 2);
+        muteGfx.strokePath();
+      } else {
+        // Sound waves
+        muteGfx.lineStyle(1.8, 0xffffff, 1.0);
+        muteGfx.beginPath();
+        muteGfx.arc(0, 0, 5, -Math.PI / 3, Math.PI / 3, false);
+        muteGfx.strokePath();
+      }
+    };
+
+    drawMute(GameData.muted.get());
+    muteBtn.add(muteGfx);
+    muteBtn.setInteractive(new Phaser.Geom.Rectangle(-20, -20, 40, 40), Phaser.Geom.Rectangle.Contains);
+    muteBtn.input!.cursor = 'pointer';
+
+    muteBtn.on('pointerdown', () => {
+      const muted = GameData.muted.toggle();
+      drawMute(muted);
+      if (muted) audio.stopBGM(); else audio.playBGM(0);
+    });
+
+    muteBtn.on('pointerover', () => {
+      this.tweens.add({ targets: muteBtn, scale: 1.08, duration: 100, overwrite: 'auto' });
+    });
+    muteBtn.on('pointerout', () => {
+      this.tweens.add({ targets: muteBtn, scale: 1.0, duration: 100, overwrite: 'auto' });
+    });
+  }
+
+  private createGlossyButton(
+    x: number, y: number, w: number, h: number,
+    fillCol: number, shadowCol: number,
+    label: string, delay: number
+  ): Phaser.GameObjects.Container {
+    const container = this.add.container(x, y).setAlpha(0).setDepth(15);
+    container.setInteractive(new Phaser.Geom.Rectangle(-w / 2, -h / 2, w, h), Phaser.Geom.Rectangle.Contains);
+    container.input!.cursor = 'pointer';
+
+    const bg = this.add.graphics();
+    container.add(bg);
+
+    const txt = this.add.text(0, -2, label, {
+      fontFamily: 'Fredoka, sans-serif', fontSize: '20px', fontStyle: 'bold', color: '#ffffff',
+      stroke: '#000000', strokeThickness: 3.5, align: 'center'
+    }).setOrigin(0.5);
+    container.add(txt);
+
+    const r = h / 2;
+
+    const drawBtn = (state: 'idle' | 'hover' | 'pressed') => {
+      bg.clear();
+      
+      let faceY = -h / 2;
+      let shH = 6;
+      
+      if (state === 'pressed') {
+        faceY = -h / 2 + 4;
+        shH = 2;
+        txt.setY(2);
+      } else {
+        txt.setY(-2);
+      }
+
+      const faceColBright = state === 'hover' ? blendColor(fillCol, 0xffffff, 0.12) : fillCol;
+
+      // 1. Bottom 3D shadow layer
+      bg.fillStyle(shadowCol, 1.0);
+      bg.fillRoundedRect(-w / 2, -h / 2 + shH, w, h, r);
+
+      // 2. Main top face layer
+      bg.fillStyle(faceColBright, 1.0);
+      bg.fillRoundedRect(-w / 2, faceY, w, h, r);
+
+      // 3. Highlight Bevel border
+      bg.lineStyle(1.8, 0xffffff, 0.35);
+      bg.beginPath();
+      bg.moveTo(-w / 2 + r, faceY + 1.2);
+      bg.lineTo(w / 2 - r, faceY + 1.2);
+      bg.strokePath();
+
+      // 4. White bubble gel highlight curve (mockup gloss reflection)
+      bg.fillStyle(0xffffff, 0.28);
+      bg.fillRoundedRect(-w / 2 + 15, faceY + 4, w - 30, h * 0.24, 6);
+    };
+
+    drawBtn('idle');
+
+    container.on('pointerover', () => {
+      drawBtn('hover');
+      this.tweens.add({ targets: container, scale: 1.04, duration: 100, ease: 'Quad.Out', overwrite: 'auto' });
+    });
+
+    container.on('pointerout', () => {
+      drawBtn('idle');
+      this.tweens.add({ targets: container, scale: 1.0, duration: 100, ease: 'Quad.Out', overwrite: 'auto' });
+    });
+
+    container.on('pointerdown', () => {
+      drawBtn('pressed');
+      this.tweens.add({ targets: container, scale: 0.96, duration: 50, ease: 'Quad.Out', overwrite: 'auto' });
+    });
+
+    container.on('pointerup', () => {
+      drawBtn('hover');
+      this.tweens.add({ targets: container, scale: 1.04, duration: 80, ease: 'Quad.Out', overwrite: 'auto' });
+    });
+
+    // Entrance animation and slow float
+    this.tweens.add({ targets: container, alpha: 1, duration: 450, delay: 500 + delay, ease: 'Back.Out' });
+    this.tweens.add({
+      targets: container,
+      y: y - 4,
+      duration: 1300 + delay * 0.5,
+      yoyo: true,
+      repeat: -1,
+      ease: 'Sine.InOut',
+      delay: 1000
+    });
+
+    return container;
   }
 
   private triggerBuddyWiggle() {
     if (this.buddyState === 'launch') return;
     this.buddyState = 'wiggle';
     this.buddyAnimT = 0;
-    this.buddyBumpDy = -20;
+    this.buddyBumpDy = -22;
     this.triggerHaptic(20);
     audio.playTap();
   }
@@ -203,157 +452,22 @@ export class MenuScene extends Phaser.Scene {
     });
   }
 
-
-
   private spawnFloatingBlocks(W: number, H: number) {
     const skins = ['none', 'none', 'wizard', 'crown', 'cat', 'tophat', 'chef', 'propeller', 'rainbow'];
-    for (let i = 0; i < 10; i++) {
+    for (let i = 0; i < 8; i++) {
       this.floatingBlocks.push({
         x: Math.random() * W,
         y: Math.random() * H,
-        vy: -(0.3 + Math.random() * 0.5),
+        vy: -(0.25 + Math.random() * 0.45),
         phase: Math.random() * Math.PI * 2,
-        speed: 0.3 + Math.random() * 0.4,
+        speed: 0.25 + Math.random() * 0.35,
         worldIdx: Math.floor(Math.random() * 3) + 1,
         posHash: Math.floor(Math.random() * 8),
-        scale: 0.4 + Math.random() * 0.5,
-        alpha: 0.15 + Math.random() * 0.35,
+        scale: 0.35 + Math.random() * 0.45,
+        alpha: 0.12 + Math.random() * 0.28,
         skin: skins[Math.floor(Math.random() * skins.length)]
       });
     }
-  }
-
-  private createNeonButton(
-    x: number, y: number, w: number, h: number,
-    fillCol: number, glowCol: number,
-    label: string, delay: number
-  ): Phaser.GameObjects.Container {
-    void glowCol;
-    const container = this.add.container(x, y).setAlpha(0).setDepth(10);
-    container.setSize(w, h);
-    container.setInteractive(new Phaser.Geom.Rectangle(-w / 2, -h / 2, w, h), Phaser.Geom.Rectangle.Contains);
-    container.input!.cursor = 'pointer';
-
-    const bg = this.add.graphics();
-    container.add(bg);
-
-    const labelLen = label.replace(/\p{Emoji}/gu, '  ').length;
-    const maxByH   = Math.round(h * 0.42);
-    const maxByW   = Math.round(w / Math.max(labelLen * 0.52, 1));
-    const fontSize = Math.min(maxByH, maxByW, 22);
-
-    const txt = this.add.text(0, -2, label, {
-      fontFamily: 'Orbitron',
-      fontSize: `${fontSize}px`,
-      color: '#ffffff',
-      stroke: '#000000', strokeThickness: 2.2,
-      align: 'center'
-    }).setOrigin(0.5);
-    container.add(txt);
-
-    const faceCol = fillCol;
-    const shadowCol = blendColor(faceCol, 0x000000, 0.4);
-    const r = h / 2;
-
-    const draw = (state: 'idle' | 'hover' | 'pressed') => {
-      bg.clear();
-      
-      let faceY = -h / 2;
-      let shH = 6;
-      
-      if (state === 'pressed') {
-        faceY = -h / 2 + 4;
-        shH = 2;
-        txt.setY(2);
-      } else {
-        txt.setY(-2);
-      }
-
-      const faceBright = state === 'hover' ? blendColor(faceCol, 0xffffff, 0.15) : faceCol;
-
-      // 1. Draw 3D shadow/thickness (Darker bottom layer)
-      bg.fillStyle(shadowCol, 1);
-      bg.fillRoundedRect(-w / 2, -h / 2 + shH, w, h, r);
-
-      // 2. Draw Main top face
-      bg.fillStyle(faceBright, 1);
-      bg.fillRoundedRect(-w / 2, faceY, w, h, r);
-
-      // 3. Highlight Bevel
-      bg.lineStyle(1.8, 0xffffff, 0.4);
-      bg.beginPath();
-      bg.moveTo(-w / 2 + r, faceY + 1.2);
-      bg.lineTo(w / 2 - r, faceY + 1.2);
-      bg.strokePath();
-    };
-
-    draw('idle');
-
-    container.on('pointerover', () => {
-      draw('hover');
-      this.tweens.add({
-        targets: container,
-        scaleX: 1.05,
-        scaleY: 1.05,
-        duration: 100,
-        ease: 'Quad.Out',
-        overwrite: true
-      });
-    });
-
-    container.on('pointerout', () => {
-      draw('idle');
-      this.tweens.add({
-        targets: container,
-        scaleX: 1.0,
-        scaleY: 1.0,
-        duration: 100,
-        ease: 'Quad.Out',
-        overwrite: true
-      });
-    });
-
-    container.on('pointerdown', () => {
-      draw('pressed');
-      this.tweens.add({
-        targets: container,
-        scaleX: 0.96,
-        scaleY: 0.96,
-        duration: 50,
-        ease: 'Quad.Out',
-        overwrite: true
-      });
-    });
-
-    container.on('pointerup', () => {
-      draw('hover');
-      this.tweens.add({
-        targets: container,
-        scaleX: 1.05,
-        scaleY: 1.05,
-        duration: 80,
-        ease: 'Quad.Out',
-        overwrite: true
-      });
-    });
-
-    // Entrance and idle float
-    this.tweens.add({ targets: container, alpha: 1, duration: 500, delay: 800 + delay, ease: 'Back.Out' });
-    this.tweens.add({ targets: container, y: y - 4, duration: 1400 + delay * 0.5, yoyo: true, repeat: -1, ease: 'Sine.InOut', delay: 1400 });
-
-    return container;
-  }
-
-  private createMuteButton(W: number, H: number) {
-    const btn = this.add.text(W - 45, H - 45, GameData.muted.get() ? '🔇' : '🔊', {
-      fontSize: '26px'
-    }).setOrigin(0.5).setInteractive({ useHandCursor: true });
-
-    btn.on('pointerdown', () => {
-      const muted = GameData.muted.toggle();
-      btn.setText(muted ? '🔇' : '🔊');
-      if (muted) audio.stopBGM(); else audio.playBGM();
-    });
   }
 
   update(_time: number, delta: number) {
@@ -362,11 +476,11 @@ export class MenuScene extends Phaser.Scene {
 
     this.blockGfx.clear();
 
-    // 1. Update & draw background floating blocks
+    // 1. Draw floating background blocks
     for (const b of this.floatingBlocks) {
       b.y += b.vy * dt * 60;
       b.phase += dt * b.speed;
-      const wobble = Math.sin(b.phase) * 8;
+      const wobble = Math.sin(b.phase) * 6;
 
       if (b.y < -80) { b.y = H + 80; b.x = Math.random() * W; }
 
@@ -376,37 +490,22 @@ export class MenuScene extends Phaser.Scene {
       const pal = getBlockPalette(b.worldIdx, b.posHash);
 
       this.blockGfx.setAlpha(b.alpha);
-
       const g = this.blockGfx;
       const tw = TILE_W * s, th = TILE_H * s, bh = BLOCK_H * s;
 
-      const fillPoly = (g2: Phaser.GameObjects.Graphics, coords: number[]) => {
-        g2.beginPath();
-        g2.moveTo(coords[0], coords[1]);
-        for (let i = 2; i < coords.length; i += 2) g2.lineTo(coords[i], coords[i + 1]);
-        g2.closePath();
-        g2.fillPath();
+      const fillPoly = (coords: number[]) => {
+        g.beginPath(); g.moveTo(coords[0], coords[1]);
+        for (let i = 2; i < coords.length; i += 2) g.lineTo(coords[i], coords[i + 1]);
+        g.closePath(); g.fillPath();
       };
 
-      g.fillStyle(pal.right, 1); fillPoly(g, [cx+tw,cy, cx,cy+th, cx,cy+th+bh, cx+tw,cy+bh]);
-      g.fillStyle(pal.left, 1);  fillPoly(g, [cx-tw,cy, cx,cy+th, cx,cy+th+bh, cx-tw,cy+bh]);
-      g.fillStyle(pal.top, 1);   fillPoly(g, [cx,cy-th, cx+tw,cy, cx,cy+th, cx-tw,cy]);
+      g.fillStyle(pal.right, 1); fillPoly([cx+tw,cy, cx,cy+th, cx,cy+th+bh, cx+tw,cy+bh]);
+      g.fillStyle(pal.left, 1);  fillPoly([cx-tw,cy, cx,cy+th, cx,cy+th+bh, cx-tw,cy+bh]);
+      g.fillStyle(pal.top, 1);   fillPoly([cx,cy-th, cx+tw,cy, cx,cy+th, cx-tw,cy]);
 
-      // Glossy shine
-      g.fillStyle(0xffffff, 0.2);
-      fillPoly(g, [cx, cy-th, cx+tw*0.5, cy-th*0.5, cx, cy+th*0.5, cx-tw, cy]);
-
-      // Bevel lines
-      g.lineStyle(1 * s, 0xffffff, 0.3);
-      g.beginPath();
-      g.moveTo(cx-tw, cy); g.lineTo(cx, cy+th); g.lineTo(cx+tw, cy);
-      g.strokePath();
-
-      g.lineStyle(1, pal.glow, 0.5);
-      g.beginPath();
-      g.moveTo(cx, cy-th); g.lineTo(cx+tw, cy); g.lineTo(cx, cy+th); g.lineTo(cx-tw, cy);
-      g.closePath();
-      g.strokePath();
+      // Simple gloss bevel highlight
+      g.lineStyle(1 * s, 0xffffff, 0.25);
+      g.beginPath(); g.moveTo(cx-tw, cy); g.lineTo(cx, cy+th); g.lineTo(cx+tw, cy); g.strokePath();
 
       drawHat(g, cx, cy, tw, th, b.skin, this.time.now);
     }
@@ -415,163 +514,192 @@ export class MenuScene extends Phaser.Scene {
     // 2. Update Giant Buddy Animation State
     this.buddyAnimT += dt;
 
-    // Eye blinking timer
+    // Blinking eye timer
     this.blinkTimer -= dt;
     if (this.blinkTimer <= 0) {
       this.isBlinking = true;
-      this.blinkTimer = 2.0 + Math.random() * 4.0;
-      this.time.delayedCall(120, () => { this.isBlinking = false; });
+      this.blinkTimer = 1.8 + Math.random() * 3.5;
+      this.time.delayedCall(110, () => { this.isBlinking = false; });
     }
 
     if (this.buddyState === 'idle') {
-      const breath = Math.sin(this.time.now * 0.003) * 0.025;
+      const breath = Math.sin(this.time.now * 0.0035) * 0.022;
       this.buddyScalePara = 1.0 + breath;
       this.buddyScalePerp = 1.0 - breath;
       this.buddyAngle = 0;
       this.buddyX = W / 2;
-      this.buddyY = this.buddyBaseY + Math.sin(this.time.now * 0.002) * 4;
+      this.buddyY = this.buddyBaseY + Math.sin(this.time.now * 0.002) * 5.5;
 
-      // Pointer drag/hover react
+      // Pointer drag/stretch react
       const pointer = this.input.activePointer;
       const dist = Math.hypot(pointer.x - this.buddyX, pointer.y - this.buddyY);
       if (dist < 130 && pointer.isDown) {
-        // Dragging & stretching
         const dx = pointer.x - this.buddyX;
         const dy = pointer.y - this.buddyY;
         const len = Math.hypot(dx, dy) || 1;
         this.buddyAngle = Math.atan2(dy, dx);
-        
         const stretch = Math.min(1.35, 1.0 + len * 0.004);
         this.buddyScalePara = stretch;
         this.buddyScalePerp = 1 / stretch;
-
         this.buddyX = W / 2 + dx * 0.25;
         this.buddyY = this.buddyBaseY + dy * 0.25;
       } else if (dist < 130) {
-        // Hover squeeze
         const dx = pointer.x - this.buddyX;
         const dy = pointer.y - this.buddyY;
         this.buddyAngle = Math.atan2(dy, dx);
-
         const squeeze = 1.0 - (1.0 - dist / 130) * 0.12;
         this.buddyScalePara = squeeze;
         this.buddyScalePerp = 2.0 - squeeze;
       }
     } else if (this.buddyState === 'wiggle') {
-      const dur = 0.70;
-      const scaleAmp = Math.sin(this.buddyAnimT * Math.PI * 6) * Math.exp(-this.buddyAnimT * 4.5);
+      const scaleAmp = Math.sin(this.buddyAnimT * Math.PI * 6.2) * Math.exp(-this.buddyAnimT * 4.8);
       this.buddyScalePara = 1.0 - 0.45 * scaleAmp;
       this.buddyScalePerp = 1.0 + 0.35 * scaleAmp;
       this.buddyY = this.buddyBaseY + this.buddyBumpDy * scaleAmp;
-
-      if (this.buddyAnimT >= dur) {
+      if (this.buddyAnimT >= 0.70) {
         this.buddyState = 'idle';
         this.buddyAnimT = 0;
       }
     } else if (this.buddyState === 'launch') {
-      if (this.buddyAnimT < 0.15) {
-        // Anticipation squeeze down
+      if (this.buddyAnimT < 0.14) {
         this.buddyScalePara = 0.65;
         this.buddyScalePerp = 1.35;
         this.buddyY = this.buddyBaseY + 16;
-        this.buddyAngle = Math.PI / 2; // vertical squash
+        this.buddyAngle = Math.PI / 2;
       } else {
-        // Stretch and shoot up!
-        const flyT = this.buddyAnimT - 0.15;
+        const flyT = this.buddyAnimT - 0.14;
         this.buddyScalePara = 1.48;
         this.buddyScalePerp = 0.68;
-        this.buddyY = this.buddyBaseY + 16 - flyT * flyT * 1800 - flyT * 500;
-        this.buddyAngle = Math.PI / 2; // vertical stretch
+        this.buddyY = this.buddyBaseY + 16 - flyT * flyT * 1850 - flyT * 500;
+        this.buddyAngle = Math.PI / 2;
       }
     }
 
-    // 3. Render Giant Buddy
+    // 3. Render Giant Buddy with arms, legs, shadow, blush & glowing eyes
     const g = this.blockGfx;
     const cx = this.buddyX;
     const cy = this.buddyY;
-    const s = 1.8; // scale factor
+    const s = 1.75;
     const tw = TILE_W * s;
     const th = TILE_H * s;
     const bh = BLOCK_H * s;
 
-    const pal = getBlockPalette(1, 4); // World 1 pink
+    // Soft peach-orange colors matching the user mockup
+    const topCol = 0xffe4d6;
+    const leftCol = 0xffb896;
+    const rightCol = 0xe58b60;
+    const glowCol = 0xff4e9f;
+
     const scalePara = this.buddyScalePara;
     const scalePerp = this.buddyScalePerp;
     const angle = this.buddyAngle;
     const cos = Math.cos(angle);
     const sin = Math.sin(angle);
 
-    const giantTransformer = (x: number, y: number) => {
-      const dx = x - cx;
-      const dy = y - (cy + bh / 2);
+    const giantTransformer = (px: number, py: number) => {
+      const dx = px - cx;
+      const dy = py - (cy + bh / 2);
       const rx = dx * cos + dy * sin;
       const ry = -dx * sin + dy * cos;
       const rxScaled = rx * scalePara;
       const ryScaled = ry * scalePerp;
-      const dxPrime = rxScaled * cos - ryScaled * sin;
-      const dyPrime = rxScaled * sin + ryScaled * cos;
-      return { x: cx + dxPrime, y: (cy + bh / 2) + dyPrime };
+      const dxP = rxScaled * cos - ryScaled * sin;
+      const dyP = rxScaled * sin + ryScaled * cos;
+      return { x: cx + dxP, y: (cy + bh / 2) + dyP };
     };
 
-    const tPt = (x: number, y: number) => giantTransformer(x, y);
-
-    const fillTransformedRect = (x: number, y: number, w: number, h: number) => {
-      const p1 = tPt(x, y);
-      const p2 = tPt(x + w, y);
-      const p3 = tPt(x + w, y + h);
-      const p4 = tPt(x, y + h);
-      g.beginPath();
-      g.moveTo(p1.x, p1.y);
-      g.lineTo(p2.x, p2.y);
-      g.lineTo(p3.x, p3.y);
-      g.lineTo(p4.x, p4.y);
-      g.closePath();
-      g.fillPath();
-    };
+    const tPt = (px: number, py: number) => giantTransformer(px, py);
 
     const scaleX = scalePara * Math.abs(cos) + scalePerp * Math.abs(sin);
     const scaleY = scalePara * Math.abs(sin) + scalePerp * Math.abs(cos);
 
-    drawIsoCube(g, cx, cy, pal.top, pal.left, pal.right, pal.glow, 0.72, giantTransformer, 1, this.time.now);
+    // Floor shadow (drawn first)
+    g.fillStyle(0x050012, 0.48);
+    g.fillEllipse(cx, cy + 46, 82 * scaleX, 22 * scaleY);
 
-    // Draw face
+    // Draw transformed stubby legs
+    // Left leg
+    g.fillStyle(0xffb896, 1.0);
+    const ll1 = tPt(cx - 16, cy + 34);
+    const ll2 = tPt(cx - 16, cy + 48);
+    g.lineStyle(14 * scaleX, 0xffb896, 1.0);
+    g.beginPath(); g.moveTo(ll1.x, ll1.y); g.lineTo(ll2.x, ll2.y); g.strokePath();
+
+    // Right leg
+    const rl1 = tPt(cx + 16, cy + 34);
+    const rl2 = tPt(cx + 16, cy + 48);
+    g.lineStyle(14 * scaleX, 0xffb896, 1.0);
+    g.beginPath(); g.moveTo(rl1.x, rl1.y); g.lineTo(rl2.x, rl2.y); g.strokePath();
+
+    // Draw transformed stubby side arms
+    // Left arm
+    const la1 = tPt(cx - 38, cy + 14);
+    const la2 = tPt(cx - 50, cy + 24);
+    g.lineStyle(16 * scaleX, 0xffb896, 1.0);
+    g.beginPath(); g.moveTo(la1.x, la1.y); g.lineTo(la2.x, la2.y); g.strokePath();
+
+    // Right arm
+    const ra1 = tPt(cx + 38, cy + 14);
+    const ra2 = tPt(cx + 50, cy + 24);
+    g.lineStyle(16 * scaleX, 0xffb896, 1.0);
+    g.beginPath(); g.moveTo(ra1.x, ra1.y); g.lineTo(ra2.x, ra2.y); g.strokePath();
+
+    // Draw main isometric cube body
+    drawIsoCube(g, cx, cy, topCol, leftCol, rightCol, glowCol, 0.72, giantTransformer, 1, this.time.now);
+
+    // Draw eyes & face details
     const eyeY = cy - th * 0.15;
-    const eyeScaleY = this.isBlinking ? 0.15 : 1;
+    const drawEye = (ex: number, ey: number) => {
+      const ep = tPt(ex, ey);
+      if (this.isBlinking) {
+        g.lineStyle(3.5 * scaleY, 0x220516, 1.0);
+        g.beginPath();
+        g.moveTo(ep.x - 7 * scaleX, ep.y);
+        g.lineTo(ep.x + 7 * scaleX, ep.y);
+        g.strokePath();
+      } else {
+        // Glowing neon pink/magenta ring outer outline
+        g.lineStyle(2.8 * Math.min(scaleX, scaleY), 0xff3d9c, 0.95);
+        g.strokeCircle(ep.x, ep.y, 8.5 * Math.min(scaleX, scaleY));
 
-    g.fillStyle(0x111111, 1);
-    const le = tPt(cx - 15, eyeY);
-    g.fillEllipse(le.x, le.y, 12 * scaleX, 10 * eyeScaleY * scaleY);
-    const re = tPt(cx + 15, eyeY);
-    g.fillEllipse(re.x, re.y, 12 * scaleX, 10 * eyeScaleY * scaleY);
+        // Dark pupil
+        g.fillStyle(0x220516, 1.0);
+        g.fillCircle(ep.x, ep.y, 7.5 * Math.min(scaleX, scaleY));
+
+        // Double shine highlights
+        g.fillStyle(0xffffff, 1.0);
+        const sh1 = tPt(ex - 2, ey - 2.5);
+        const sh2 = tPt(ex + 2, ey + 2);
+        g.fillCircle(sh1.x, sh1.y, 2.2 * Math.min(scaleX, scaleY));
+        g.fillCircle(sh2.x, sh2.y, 1.0 * Math.min(scaleX, scaleY));
+      }
+    };
+
+    drawEye(cx - 15, eyeY);
+    drawEye(cx + 15, eyeY);
 
     if (!this.isBlinking) {
-      g.fillStyle(0xffffff, 0.85);
-      const lhl = tPt(cx - 13, eyeY - 2);
-      const rhl = tPt(cx + 17, eyeY - 2);
-      g.fillCircle(lhl.x, lhl.y, 3 * Math.min(scaleX, scaleY));
-      g.fillCircle(rhl.x, rhl.y, 3 * Math.min(scaleX, scaleY));
-
-      // blush
-      g.fillStyle(0xff79a8, 0.45);
+      // Soft glowing cheek blush
+      g.fillStyle(0xff4a95, 0.42);
       const lc = tPt(cx - 24, eyeY + 6);
       const rc = tPt(cx + 24, eyeY + 6);
-      g.fillEllipse(lc.x, lc.y, 14 * scaleX, 6 * scaleY);
-      g.fillEllipse(rc.x, rc.y, 14 * scaleX, 6 * scaleY);
+      g.fillEllipse(lc.x, lc.y, 13 * scaleX, 6 * scaleY);
+      g.fillEllipse(rc.x, rc.y, 13 * scaleX, 6 * scaleY);
     }
 
+    // Tiny smile
     if (this.buddyState === 'wiggle') {
-      g.fillStyle(0x111111, 1);
-      fillTransformedRect(cx - 20, eyeY - 2, 9, 2.5);
-      fillTransformedRect(cx - 16, eyeY - 6, 2.5, 9.5);
-      fillTransformedRect(cx + 11, eyeY - 2, 9, 2.5);
-      fillTransformedRect(cx + 15, eyeY - 6, 2.5, 9.5);
+      g.lineStyle(3, 0x220516, 1.0);
+      const s1 = tPt(cx - 5, eyeY + 12);
+      const s2 = tPt(cx + 5, eyeY + 12);
+      g.beginPath(); g.moveTo(s1.x, s1.y); g.lineTo(s2.x, s2.y); g.strokePath();
     } else {
-      const s1 = tPt(cx - 7, eyeY + 12);
-      const s1m = tPt(cx - 3.5, eyeY + 15.5);
-      const s2 = tPt(cx, eyeY + 17.5);
-      const s2m = tPt(cx + 3.5, eyeY + 15.5);
-      const s3 = tPt(cx + 7, eyeY + 12);
-      g.lineStyle(3, 0x333333, 0.9);
+      const s1 = tPt(cx - 6, eyeY + 12);
+      const s1m = tPt(cx - 3, eyeY + 15);
+      const s2 = tPt(cx, eyeY + 16.5);
+      const s2m = tPt(cx + 3, eyeY + 15);
+      const s3 = tPt(cx + 6, eyeY + 12);
+      g.lineStyle(3, 0x220516, 0.95);
       g.beginPath();
       g.moveTo(s1.x, s1.y);
       g.lineTo(s1m.x, s1m.y);
@@ -581,7 +709,7 @@ export class MenuScene extends Phaser.Scene {
       g.strokePath();
     }
 
-    // Hat
+    // Hat (if any)
     drawHat(g, cx, cy, tw, th, this.buddySkin, this.time.now, giantTransformer);
   }
 }

@@ -15,6 +15,12 @@
     "vite": "^8.1.1"
   },
   "dependencies": {
-    "phaser": "^4.2.0"
+    "@types/canvas-confetti": "^1.9.0",
+    "@types/howler": "^2.2.13",
+    "canvas-confetti": "^1.9.4",
+    "gsap": "^3.15.0",
+    "howler": "^2.2.4",
+    "phaser": "^4.2.0",
+    "phaser3-rex-plugins": "^1.80.20"
   }
 }
