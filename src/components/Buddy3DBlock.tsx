@@ -12,7 +12,7 @@ interface Buddy3DBlockProps {
 export const Buddy3DBlock: React.FC<Buddy3DBlockProps> = ({ buddy }) => {
   const meshRef = useRef<THREE.Group>(null);
   const propRef = useRef<THREE.Mesh>(null);
-  const { selectedWorld, activeSkin, tapBlock } = useGameStore();
+  const { selectedWorld, activeSkin, tapBlock, levelGridCoords } = useGameStore();
 
   // Rainbow hue cycle state
   const [rainbowColor, setRainbowColor] = useState<THREE.Color>(new THREE.Color('#ff00bb'));
