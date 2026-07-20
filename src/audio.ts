@@ -1,4 +1,4 @@
-﻿/* audio.ts — Howler.js BGM (pre-rendered PCM loops) + Web Audio SFX synthesis
+/* audio.ts — Howler.js BGM (pre-rendered PCM loops) + Web Audio SFX synthesis
  *
  * BGM architecture:
  *   Each world has 3 looping Howl layers: bass, melody, arp.
@@ -28,20 +28,20 @@ interface WorldTheme {
 }
 
 const WORLD_THEMES: WorldTheme[] = [
-  // 0: Menu — C pentatonic, 118 BPM
-  { bpm: 118, bassNotes: [130.81,98.00,146.83,130.81], melodyNotes: [523.25,659.25,783.99,659.25,783.99,1046.50,880.00,659.25], arpNotes: [1046.50,1318.51,1567.98,1318.51,1046.50,880.00,1046.50,1318.51], bassWave:'sine', melodyWave:'triangle', arpWave:'sine', bassGain:0.28, melodyGain:0.18, arpGain:0.10, reverb:0.25 },
-  // 1: Jelly — C major, 138 BPM, bouncy
-  { bpm: 138, bassNotes: [130.81,130.81,164.81,174.61,196.00,164.81,174.61,130.81], melodyNotes: [523.25,659.25,783.99,880.00,1046.50,880.00,783.99,659.25], arpNotes: [1046.50,1318.51,1567.98,2093.00,1567.98,1318.51,1046.50,783.99], bassWave:'sine', melodyWave:'sine', arpWave:'sine', bassGain:0.30, melodyGain:0.22, arpGain:0.12, reverb:0.15 },
-  // 2: Wood — G minor, 110 BPM, warm triangle
-  { bpm: 110, bassNotes: [98.00,116.54,130.81,98.00,87.31,116.54,98.00,87.31], melodyNotes: [392.00,466.16,523.25,587.33,466.16,392.00,349.23,392.00], arpNotes: [783.99,932.33,1046.50,1174.66,932.33,783.99,698.46,783.99], bassWave:'triangle', melodyWave:'triangle', arpWave:'triangle', bassGain:0.28, melodyGain:0.20, arpGain:0.11, reverb:0.30 },
-  // 3: Iron — D minor, 132 BPM, mechanical sawtooth
-  { bpm: 132, bassNotes: [146.83,174.61,196.00,146.83,130.81,174.61,146.83,123.47], melodyNotes: [587.33,698.46,783.99,880.00,783.99,698.46,587.33,523.25], arpNotes: [1174.66,1396.91,1567.98,1760.00,1567.98,1396.91,1174.66,1046.50], bassWave:'sawtooth', melodyWave:'sawtooth', arpWave:'square', bassGain:0.22, melodyGain:0.16, arpGain:0.09, reverb:0.10 },
-  // 4: Water — F major, 100 BPM, flowing sine
-  { bpm: 100, bassNotes: [174.61,130.81,146.83,174.61,196.00,174.61,146.83,130.81], melodyNotes: [698.46,783.99,880.00,1046.50,880.00,783.99,698.46,659.25], arpNotes: [1396.91,1567.98,1760.00,2093.00,1760.00,1567.98,1396.91,1318.51], bassWave:'sine', melodyWave:'sine', arpWave:'sine', bassGain:0.26, melodyGain:0.20, arpGain:0.12, reverb:0.45 },
-  // 5: Ice — A minor, 92 BPM, crystalline high sine
-  { bpm: 92, bassNotes: [110.00,130.81,146.83,110.00,98.00,130.81,110.00,98.00], melodyNotes: [880.00,1046.50,1174.66,1318.51,1174.66,1046.50,880.00,783.99], arpNotes: [1760.00,2093.00,2349.32,2637.02,2349.32,2093.00,1760.00,1567.98], bassWave:'sine', melodyWave:'sine', arpWave:'sine', bassGain:0.22, melodyGain:0.16, arpGain:0.10, reverb:0.55 },
-  // 6: Magma — E minor, 158 BPM, intense sawtooth
-  { bpm: 158, bassNotes: [82.41,87.31,98.00,82.41,73.42,87.31,82.41,73.42], melodyNotes: [329.63,349.23,392.00,329.63,293.66,349.23,329.63,261.63], arpNotes: [659.25,698.46,784.00,659.25,587.33,698.46,659.25,523.25], bassWave:'sawtooth', melodyWave:'sawtooth', arpWave:'sawtooth', bassGain:0.32, melodyGain:0.22, arpGain:0.14, reverb:0.05 },
+  // 0: Menu — C pentatonic, 116 BPM, memorable cozy theme
+  { bpm: 116, bassNotes: [130.81, 98.00, 110.00, 87.31], melodyNotes: [523.25, 587.33, 659.25, 783.99, 880.00, 783.99, 659.25, 587.33, 659.25, 783.99, 880.00, 1046.50, 880.00, 783.99, 659.25, 523.25], arpNotes: [783.99, 880.00, 1046.50, 1318.51, 1046.50, 880.00, 783.99, 659.25, 880.00, 1046.50, 1318.51, 1567.98, 1318.51, 1046.50, 880.00, 783.99], bassWave:'sine', melodyWave:'triangle', arpWave:'sine', bassGain:0.32, melodyGain:0.20, arpGain:0.12, reverb:0.25 },
+  // 1: Jelly Hills — C major, 135 BPM, bouncy & cute
+  { bpm: 135, bassNotes: [130.81, 164.81, 174.61, 196.00, 130.81, 164.81, 174.61, 196.00], melodyNotes: [523.25, 659.25, 783.99, 659.25, 880.00, 783.99, 1046.50, 783.99], arpNotes: [1046.50, 1318.51, 1567.98, 1318.51, 1046.50, 1318.51, 1567.98, 2093.00], bassWave:'sine', melodyWave:'sine', arpWave:'sine', bassGain:0.35, melodyGain:0.24, arpGain:0.14, reverb:0.15 },
+  // 2: Dino Valley — G minor, 108 BPM, tropical wooden logs
+  { bpm: 108, bassNotes: [98.00, 116.54, 130.81, 146.83, 98.00, 116.54, 130.81, 146.83], melodyNotes: [392.00, 466.16, 523.25, 587.33, 466.16, 392.00, 349.23, 392.00], arpNotes: [783.99, 932.33, 1046.50, 1174.66, 932.33, 783.99, 698.46, 783.99], bassWave:'triangle', melodyWave:'triangle', arpWave:'triangle', bassGain:0.32, melodyGain:0.22, arpGain:0.13, reverb:0.30 },
+  // 3: Cosmo Station — D minor, 130 BPM, heavy neon synthwave
+  { bpm: 130, bassNotes: [146.83, 116.54, 130.81, 110.00, 146.83, 116.54, 130.81, 110.00], melodyNotes: [587.33, 698.46, 783.99, 880.00, 783.99, 698.46, 587.33, 523.25], arpNotes: [1174.66, 1396.91, 1567.98, 1760.00, 1567.98, 1396.91, 1174.66, 1046.50], bassWave:'sawtooth', melodyWave:'sawtooth', arpWave:'square', bassGain:0.24, melodyGain:0.18, arpGain:0.10, reverb:0.10 },
+  // 4: Coral Reef — F major, 98 BPM, liquid bubble drops
+  { bpm: 98, bassNotes: [174.61, 130.81, 146.83, 116.54, 174.61, 130.81, 146.83, 116.54], melodyNotes: [698.46, 783.99, 880.00, 1046.50, 880.00, 783.99, 698.46, 659.25], arpNotes: [1396.91, 1567.98, 1760.00, 2093.00, 1760.00, 1567.98, 1396.91, 1318.51], bassWave:'sine', melodyWave:'sine', arpWave:'sine', bassGain:0.30, melodyGain:0.22, arpGain:0.14, reverb:0.45 },
+  // 5: Ice Castle — A minor, 90 BPM, sparkling bell spires
+  { bpm: 90, bassNotes: [110.00, 87.31, 130.81, 98.00, 110.00, 87.31, 130.81, 98.00], melodyNotes: [880.00, 1046.50, 1174.66, 1318.51, 1174.66, 1046.50, 880.00, 783.99], arpNotes: [1760.00, 2093.00, 2349.32, 2637.02, 2349.32, 2093.00, 1760.00, 1567.98], bassWave:'sine', melodyWave:'sine', arpWave:'sine', bassGain:0.25, melodyGain:0.18, arpGain:0.12, reverb:0.55 },
+  // 6: Magma — E minor, 155 BPM, epic volcanic metal
+  { bpm: 155, bassNotes: [82.41, 65.41, 73.42, 123.47, 82.41, 65.41, 73.42, 123.47], melodyNotes: [329.63, 349.23, 392.00, 329.63, 293.66, 349.23, 329.63, 261.63], arpNotes: [659.25, 698.46, 784.00, 659.25, 587.33, 698.46, 659.25, 523.25], bassWave:'sawtooth', melodyWave:'sawtooth', arpWave:'sawtooth', bassGain:0.35, melodyGain:0.24, arpGain:0.16, reverb:0.05 },
 ];
 
 type LayerKind = 'bass' | 'melody' | 'arp';
@@ -90,32 +90,58 @@ async function renderLoop(theme: WorldTheme, layer: LayerKind): Promise<string> 
     if (!freq) continue;
 
     const startTime = i * noteStep;
-    const osc = offCtx.createOscillator();
+    
+    // DETUNING & DUAL OSCILLATORS:
+    // Create two oscillators to give a fat analog synth sound!
+    const osc1 = offCtx.createOscillator();
+    const osc2 = offCtx.createOscillator();
+    const oscMix = offCtx.createGain();
     const env = offCtx.createGain();
+    const filter = offCtx.createBiquadFilter();
 
-    osc.type = wave;
-    osc.frequency.value = freq;
+    osc1.type = wave;
+    osc1.frequency.value = freq;
+    
+    osc2.type = wave;
+    osc2.frequency.value = freq * 1.0046; // Detune second oscillator by 8 cents for chorus thickness
 
-    if (layer === 'melody') {
-      osc.frequency.setValueAtTime(freq * 0.997, startTime);
-      osc.frequency.linearRampToValueAtTime(freq * 1.003, startTime + noteDur * 0.5);
-      osc.frequency.linearRampToValueAtTime(freq * 0.997, startTime + noteDur);
+    // Animate vibrato pitch modulation on melody & arpeggios
+    if (layer === 'melody' || layer === 'arp') {
+      osc1.frequency.setValueAtTime(freq * 0.996, startTime);
+      osc1.frequency.linearRampToValueAtTime(freq * 1.004, startTime + noteDur * 0.45);
+      osc1.frequency.linearRampToValueAtTime(freq * 0.996, startTime + noteDur);
+      
+      osc2.frequency.setValueAtTime(freq * 1.0006, startTime);
+      osc2.frequency.linearRampToValueAtTime(freq * 1.0086, startTime + noteDur * 0.45);
+      osc2.frequency.linearRampToValueAtTime(freq * 1.0006, startTime + noteDur);
     }
 
-    const attack  = layer === 'bass' ? 0.012 : layer === 'melody' ? 0.020 : 0.005;
-    const release = layer === 'bass' ? 0.15  : layer === 'melody' ? 0.18  : 0.08;
+    // Set filter configuration for juicy resonant lowpass sweeps
+    filter.type = 'lowpass';
+    filter.Q.value = layer === 'bass' ? 5.5 : 3.0; // high resonance
+    filter.frequency.setValueAtTime(freq * 4.2, startTime);
+    filter.frequency.exponentialRampToValueAtTime(freq * (layer === 'bass' ? 1.4 : 1.8), startTime + noteDur * 0.7);
+
+    const attack  = layer === 'bass' ? 0.010 : layer === 'melody' ? 0.016 : 0.005;
+    const release = layer === 'bass' ? 0.16  : layer === 'melody' ? 0.20  : 0.07;
 
     env.gain.setValueAtTime(0.0001, startTime);
-    env.gain.linearRampToValueAtTime(1.0, startTime + attack);
-    env.gain.setValueAtTime(1.0, startTime + noteDur - release);
+    env.gain.linearRampToValueAtTime(0.5, startTime + attack);
+    env.gain.setValueAtTime(0.5, startTime + noteDur - release);
     env.gain.exponentialRampToValueAtTime(0.0001, startTime + noteDur);
 
-    osc.connect(env);
+    // Connections: Osc1/Osc2 -> Mix -> Filter -> Env -> Shaper -> Master
+    osc1.connect(oscMix);
+    osc2.connect(oscMix);
+    oscMix.connect(filter);
+    filter.connect(env);
     env.connect(shaper);
     shaper.connect(masterGain);
 
-    osc.start(startTime);
-    osc.stop(startTime + noteDur + 0.01);
+    osc1.start(startTime);
+    osc1.stop(startTime + noteDur + 0.01);
+    osc2.start(startTime);
+    osc2.stop(startTime + noteDur + 0.01);
   }
 
   const rendered = await offCtx.startRendering();
@@ -175,18 +201,36 @@ class AudioManager {
   }
 
   private async preRenderAllThemes() {
-    for (let w = 0; w < WORLD_THEMES.length; w++) {
-      const theme = WORLD_THEMES[w];
+    // 1. Render Menu Theme (World 0) immediately so the main menu boots instantly!
+    try {
+      const theme = WORLD_THEMES[0];
       for (const layer of ['bass', 'melody', 'arp'] as LayerKind[]) {
-        try {
-          const url = await renderLoop(theme, layer);
-          this.renderedCache.set(`${w}-${layer}`, url);
-        } catch { /* ignore */ }
+        const url = await renderLoop(theme, layer);
+        this.renderedCache.set(`0-${layer}`, url);
       }
+      this.renderReady = true;
+      if (this.currentWorld === 0 || this.currentWorld === -1) {
+        this.startHowlLayers(0);
+      }
+    } catch (e) {
+      console.warn('Failed to render menu theme:', e);
     }
-    this.renderReady = true;
-    if (this.currentWorld >= 0) {
-      this.startHowlLayers(this.currentWorld);
+
+    // 2. Stagger-render remaining themes in background to eliminate startup freezing
+    for (let w = 1; w < WORLD_THEMES.length; w++) {
+      const theme = WORLD_THEMES[w];
+      setTimeout(async () => {
+        for (const layer of ['bass', 'melody', 'arp'] as LayerKind[]) {
+          try {
+            const url = await renderLoop(theme, layer);
+            this.renderedCache.set(`${w}-${layer}`, url);
+          } catch { /* ignore */ }
+        }
+        // Start layers if user is already playing this world
+        if (this.currentWorld === w && !this.layers.bass) {
+          this.startHowlLayers(w);
+        }
+      }, w * 300);
     }
   }
 
