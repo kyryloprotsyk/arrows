@@ -1,18 +1,14 @@
 import React from 'react';
 import { useGameStore } from '../store';
 import { motion, AnimatePresence } from 'framer-motion';
-import { ArrowLeft, RotateCw, RotateCcw, Home, HelpCircle, RefreshCw } from 'lucide-react';
-import { WORLDS } from './WorldSelect';
+import { RotateCcw, RotateCw, Home, HelpCircle, RefreshCw } from 'lucide-react';
 
 export const GameHUD: React.FC = () => {
   const {
-    coins,
     movesLeft,
     movesTotal,
-    parTotal,
-    selectedWorld,
-    selectedLevel,
-    isDaily,
+    levelName,
+    levelNumberText,
     comboCount,
     setScreen,
     resetLevel,
@@ -20,91 +16,45 @@ export const GameHUD: React.FC = () => {
     setModal
   } = useGameStore();
 
-  const worldInfo = WORLDS.find(w => w.id === selectedWorld) ?? WORLDS[0];
-
-
+  const ratio = movesLeft / movesTotal;
+  const starsEarned = ratio >= 0.4 ? 3 : ratio >= 0.15 ? 2 : 1;
 
   return (
     <div style={{ position: 'absolute', inset: 0, pointerEvents: 'none', zIndex: 50 }}>
-      {/* Top HUD Row */}
-      <div className="gameplay-hud" style={{ pointerEvents: 'auto' }}>
-        {/* Left stack: Back Button + Level display */}
-        <div className="hud-left">
-          <motion.button
-            whileHover={{ scale: 1.05 }}
-            whileTap={{ scale: 0.95 }}
-            onClick={() => setScreen('level_select')}
-            className="hud-btn"
-          >
-            <ArrowLeft size={20} />
-          </motion.button>
-          
-          <div className="hud-bubble" style={{ borderLeftWidth: '5px', borderLeftColor: `hsl(${worldInfo.hue}, 95%, 60%)` }}>
-            <span style={{ fontSize: '12px', letterSpacing: '0.5px' }}>
-              {isDaily ? 'DAILY' : `W${selectedWorld} · L${selectedLevel}`}
-            </span>
+      {/* Top HUD Containers */}
+      <div className="hud-top-container">
+        {/* Left: MOVES Capsule */}
+        <div className="moves-capsule">
+          <span className="moves-title">Moves</span>
+          <div className="moves-value-container">
+            <span className="moves-star-icon">⭐</span>
+            <span className="moves-value">{movesLeft}</span>
+            <span className="moves-total">/{movesTotal}</span>
           </div>
         </div>
 
-        {/* Center: Moves / Stars Bubble */}
-        <div className="hud-center-card">
-          <div className="hud-moves-metric">
-            <span className="hud-moves-val" style={{ color: movesLeft <= 3 ? 'var(--color-pink)' : 'var(--color-cyan)' }}>
-              {movesLeft}
+        {/* Center: Title Capsule + Stars Pill */}
+        <div className="center-hud-group">
+          <div className="level-title-capsule">
+            <span className="level-title-text">
+              {levelNumberText}: {levelName}
             </span>
-            <span className="hud-moves-lbl">MOVES</span>
           </div>
-
-          <div className="hud-divider" />
-
-          <div className="hud-stars-metric">
-            <span className="hud-stars-val">
-              {Array.from({ length: 3 }).map((_, sIdx) => {
-                const earned = movesLeft >= Math.max(1, Math.round(movesTotal * (sIdx === 2 ? 0.4 : sIdx === 1 ? 0.15 : 0)));
-                return (
-                  <span
-                    key={sIdx}
-                    style={{
-                      opacity: earned ? 1 : 0.2,
-                      textShadow: earned ? '0 0 5px #ffcc00' : 'none',
-                      fontSize: '20px'
-                    }}
-                  >
-                    ⭐
-                  </span>
-                );
-              })}
-            </span>
-            <span className="hud-moves-lbl" style={{ color: 'var(--color-yellow)' }}>
-              TARGET: {parTotal}
-            </span>
+          
+          <div className="star-slots-pill">
+            <span className="star-slot-icon" style={{ opacity: starsEarned >= 1 ? 1 : 0.25 }}>⭐</span>
+            <span className="star-slot-icon" style={{ opacity: starsEarned >= 2 ? 1 : 0.25 }}>⭐</span>
+            <span className="star-slot-icon" style={{ opacity: starsEarned >= 3 ? 1 : 0.25 }}>⭐</span>
           </div>
         </div>
 
-        {/* Right Stack: Reset + Help + Coin meter */}
-        <div className="hud-right">
-          <motion.button
-            whileHover={{ scale: 1.05 }}
-            whileTap={{ scale: 0.95 }}
-            onClick={() => resetLevel()}
-            className="hud-btn"
-            title="Reset level"
-          >
-            <RefreshCw size={18} />
-          </motion.button>
-          
-          <motion.button
-            whileHover={{ scale: 1.05 }}
-            whileTap={{ scale: 0.95 }}
-            onClick={() => setModal('help')}
-            className="hud-btn"
-          >
-            <HelpCircle size={18} />
-          </motion.button>
-
-          <div className="hud-bubble">
-            <span>🪙</span>
-            <span>{coins}</span>
+        {/* Right: STARS Capsule */}
+        <div className="stars-capsule">
+          <span className="stars-title">Stars:</span>
+          <div className="stars-value-container">
+            <span className="moves-star-icon">⭐</span>
+            <span className="stars-value">{starsEarned}</span>
+            <span className="stars-total">/3</span>
           </div>
         </div>
       </div>
@@ -125,44 +75,77 @@ export const GameHUD: React.FC = () => {
         )}
       </AnimatePresence>
 
-      {/* Bottom Rotate Controls */}
-      <div className="bottom-controls">
-        <motion.button
-          whileHover={{ scale: 1.05 }}
-          whileTap={{ scale: 0.9 }}
-          onClick={() => rotateView(-1)}
-          className="rotate-btn"
-          title="Rotate Board Left"
-        >
-          <RotateCcw size={24} />
-        </motion.button>
+      {/* Bottom control capsule panel */}
+      <div className="bottom-hud-bar">
+        {/* Rotate Left Button */}
+        <div className="control-btn-wrapper">
+          <motion.button
+            whileHover={{ scale: 1.05 }}
+            whileTap={{ scale: 0.9 }}
+            onClick={() => rotateView(-1)}
+            className="btn-gel-control"
+            title="Rotate Left"
+          >
+            <RotateCcw size={22} />
+          </motion.button>
+          <span className="control-btn-label">Rotate Left</span>
+        </div>
 
-        <motion.button
-          whileHover={{ scale: 1.05 }}
-          whileTap={{ scale: 0.9 }}
-          onClick={() => setScreen('menu')}
-          className="rotate-btn"
-          style={{
-            width: '52px',
-            height: '52px',
-            marginTop: '4px',
-            background: 'linear-gradient(to bottom, hsl(335, 100%, 72%), hsl(335, 100%, 58%))',
-            borderBottomColor: 'hsl(335, 100%, 35%)'
-          }}
-          title="Go to main menu"
-        >
-          <Home size={20} />
-        </motion.button>
+        {/* Rotate Right Button */}
+        <div className="control-btn-wrapper">
+          <motion.button
+            whileHover={{ scale: 1.05 }}
+            whileTap={{ scale: 0.9 }}
+            onClick={() => rotateView(1)}
+            className="btn-gel-control"
+            title="Rotate Right"
+          >
+            <RotateCw size={22} />
+          </motion.button>
+          <span className="control-btn-label">Rotate Right</span>
+        </div>
 
-        <motion.button
-          whileHover={{ scale: 1.05 }}
-          whileTap={{ scale: 0.9 }}
-          onClick={() => rotateView(1)}
-          className="rotate-btn"
-          title="Rotate Board Right"
-        >
-          <RotateCw size={24} />
-        </motion.button>
+        {/* Home Button */}
+        <div className="control-btn-wrapper">
+          <motion.button
+            whileHover={{ scale: 1.05 }}
+            whileTap={{ scale: 0.9 }}
+            onClick={() => setScreen('menu')}
+            className="btn-gel-control"
+            title="Home"
+          >
+            <Home size={22} />
+          </motion.button>
+          <span className="control-btn-label">Home</span>
+        </div>
+
+        {/* Reset Button (Pink variant) */}
+        <div className="control-btn-wrapper">
+          <motion.button
+            whileHover={{ scale: 1.05 }}
+            whileTap={{ scale: 0.9 }}
+            onClick={() => resetLevel()}
+            className="btn-gel-control btn-gel-control-pink"
+            title="Reset"
+          >
+            <RefreshCw size={22} />
+          </motion.button>
+          <span className="control-btn-label">Reset</span>
+        </div>
+
+        {/* Help Button */}
+        <div className="control-btn-wrapper">
+          <motion.button
+            whileHover={{ scale: 1.05 }}
+            whileTap={{ scale: 0.9 }}
+            onClick={() => setModal('help')}
+            className="btn-gel-control"
+            title="Help"
+          >
+            <HelpCircle size={22} />
+          </motion.button>
+          <span className="control-btn-label">Help</span>
+        </div>
       </div>
     </div>
   );

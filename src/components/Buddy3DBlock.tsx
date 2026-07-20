@@ -53,6 +53,43 @@ export const Buddy3DBlock: React.FC<Buddy3DBlockProps> = ({ buddy }) => {
 
     ctx.clearRect(0, 0, 256, 256);
 
+    // 0. Draw direction arrow on the face
+    const drawFaceArrow = (dir: { x: number, y: number, z: number }) => {
+      ctx.save();
+      ctx.translate(128, 62); // Position near top-center of the face
+      
+      // Calculate rotation angle
+      let angle = 0;
+      if (dir.z < -0.5) angle = 0; // points right (up-right / -Z)
+      else if (dir.x < -0.5) angle = -Math.PI / 2; // points up (up-left / -X)
+      else if (dir.z > 0.5) angle = Math.PI; // points left (down-left / +Z)
+      else if (dir.x > 0.5) angle = Math.PI / 2; // points down (down-right / +X)
+      
+      ctx.rotate(angle);
+      
+      // Draw thick white arrow
+      ctx.fillStyle = '#ffffff';
+      ctx.beginPath();
+      // Arrow head
+      ctx.moveTo(22, 0);
+      ctx.lineTo(0, -22);
+      ctx.lineTo(-22, 0);
+      ctx.lineTo(-9, -2);
+      // Arrow stem
+      ctx.lineTo(-9, 18);
+      ctx.lineTo(9, 18);
+      ctx.lineTo(9, -2);
+      ctx.closePath();
+      ctx.fill();
+      ctx.restore();
+    };
+
+    // Draw the white arrow on the face for Level 24 or if customized
+    const isCustomLevel = selectedWorld === 3 && levelGridCoords.length === 64; // Level 24
+    if (isCustomLevel && buddy.type !== 'chest' && buddy.type !== 'portal') {
+      drawFaceArrow(buddy.dir);
+    }
+
     // 1. Soft radial-gradient blushing cheeks
     const drawCheek = (cx: number, cy: number) => {
       const rad = 26;
@@ -68,10 +105,10 @@ export const Buddy3DBlock: React.FC<Buddy3DBlockProps> = ({ buddy }) => {
     drawCheek(204, 142); // right cheek
 
     // 2. Glossy eyes
-    const drawEye = (cx: number, cy: number, scaleY: number) => {
+    const drawEye = (cx: number, cy: number, scaleY: number, isWink = false) => {
       ctx.save();
-      if (scaleY < 0.25) {
-        // Blinking lines
+      if (scaleY < 0.25 || isWink) {
+        // Curved line for closed/winking eye
         ctx.strokeStyle = '#0b0218';
         ctx.lineWidth = 11;
         ctx.lineCap = 'round';
@@ -98,29 +135,57 @@ export const Buddy3DBlock: React.FC<Buddy3DBlockProps> = ({ buddy }) => {
       ctx.restore();
     };
 
-    if (buddy.state === 'bump') {
-      // Squinting > < eyes
-      const drawSquint = (cx: number, cy: number, flip: boolean) => {
-        ctx.strokeStyle = '#0b0218';
-        ctx.lineWidth = 11;
-        ctx.lineCap = 'round';
-        ctx.beginPath();
-        if (flip) {
-          ctx.moveTo(cx - 14, cy - 10);
-          ctx.lineTo(cx + 10, cy);
-          ctx.lineTo(cx - 14, cy + 10);
-        } else {
-          ctx.moveTo(cx + 14, cy - 10);
-          ctx.lineTo(cx - 10, cy);
-          ctx.lineTo(cx + 14, cy + 10);
-        }
-        ctx.stroke();
-      };
-      drawSquint(68, 108, false);
-      drawSquint(188, 108, true);
+    const drawSquint = (cx: number, cy: number, flip: boolean) => {
+      ctx.strokeStyle = '#0b0218';
+      ctx.lineWidth = 11;
+      ctx.lineCap = 'round';
+      ctx.beginPath();
+      if (flip) {
+        ctx.moveTo(cx - 14, cy - 10);
+        ctx.lineTo(cx + 10, cy);
+        ctx.lineTo(cx - 14, cy + 10);
+      } else {
+        ctx.moveTo(cx + 14, cy - 10);
+        ctx.lineTo(cx - 10, cy);
+        ctx.lineTo(cx + 14, cy + 10);
+      }
+      ctx.stroke();
+    };
+
+    if (buddy.state === 'bump' || buddy.face === 'screaming') {
+      drawSquint(68, 118, false);
+      drawSquint(188, 118, true);
+    } else if (buddy.face === 'wink') {
+      drawEye(68, 118, eyeScaleY, false); // left open
+      drawEye(188, 118, 0, true);         // right wink
+    } else if (buddy.face === 'sleep') {
+      drawEye(68, 118, 0, true);          // left closed
+      drawEye(188, 118, 0, true);         // right closed
+      
+      // Draw zZ floating text
+      ctx.fillStyle = '#d3c2ff';
+      ctx.font = 'bold 32px var(--font-bubbly)';
+      ctx.fillText('zZ', 170, 75);
     } else {
-      drawEye(68, 108, eyeScaleY);
-      drawEye(188, 108, eyeScaleY);
+      drawEye(68, 118, eyeScaleY);
+      drawEye(188, 118, eyeScaleY);
+    }
+
+    // Slanted worried eyebrows
+    if (buddy.face === 'worried') {
+      ctx.strokeStyle = '#0b0218';
+      ctx.lineWidth = 7;
+      ctx.lineCap = 'round';
+      // Left eyebrow
+      ctx.beginPath();
+      ctx.moveTo(48, 80);
+      ctx.lineTo(84, 92);
+      ctx.stroke();
+      // Right eyebrow
+      ctx.beginPath();
+      ctx.moveTo(208, 80);
+      ctx.lineTo(172, 92);
+      ctx.stroke();
     }
 
     // 3. Expressive vector mouth shapes
@@ -132,6 +197,23 @@ export const Buddy3DBlock: React.FC<Buddy3DBlockProps> = ({ buddy }) => {
       // Frowning arc mouth
       ctx.beginPath();
       ctx.arc(128, 172, 16, Math.PI * 1.15, Math.PI * 1.85, false);
+      ctx.stroke();
+    } else if (buddy.face === 'screaming') {
+      // Large shouting open mouth
+      ctx.fillStyle = '#0b0218';
+      ctx.beginPath();
+      ctx.ellipse(128, 165, 18, 25, 0, 0, Math.PI * 2);
+      ctx.fill();
+      
+      // Pink tongue
+      ctx.fillStyle = '#ff5b7f';
+      ctx.beginPath();
+      ctx.ellipse(128, 178, 12, 10, 0, 0, Math.PI * 2);
+      ctx.fill();
+    } else if (buddy.face === 'worried') {
+      // Tiny worried mouth
+      ctx.beginPath();
+      ctx.arc(128, 168, 10, Math.PI, 0, false);
       ctx.stroke();
     } else if (buddy.state === 'anticipation' || buddy.state === 'escaping') {
       // Big open grin with red tongue inside
@@ -159,7 +241,7 @@ export const Buddy3DBlock: React.FC<Buddy3DBlockProps> = ({ buddy }) => {
     if (textureRef.current) {
       textureRef.current.needsUpdate = true;
     }
-  }, [buddy.state, eyeScaleY]);
+  }, [buddy.state, eyeScaleY, buddy.face]);
 
   // Animate eye blinking
   useFrame((state, delta) => {
@@ -172,7 +254,8 @@ export const Buddy3DBlock: React.FC<Buddy3DBlockProps> = ({ buddy }) => {
     setBlinkTimer(t);
 
     // Propeller spinning animation
-    if (propRef.current && (activeSkin === 'propeller' || buddy.type === 'rotator')) {
+    const blockSkin = buddy.skin || activeSkin;
+    if (propRef.current && (blockSkin === 'propeller' || buddy.type === 'rotator')) {
       propRef.current.rotation.y += delta * 12;
     }
 
@@ -188,6 +271,7 @@ export const Buddy3DBlock: React.FC<Buddy3DBlockProps> = ({ buddy }) => {
 
   // Calculate base color for normal blocks based on world
   const getBlockColor = () => {
+    if (buddy.colorOverride) return new THREE.Color(buddy.colorOverride);
     if (buddy.type === 'rainbow') return rainbowColor;
     if (buddy.type === 'bomb') return new THREE.Color('#333344');
     if (buddy.type === 'key') return new THREE.Color('#ffcc00');
@@ -245,6 +329,15 @@ export const Buddy3DBlock: React.FC<Buddy3DBlockProps> = ({ buddy }) => {
     tapBlock(buddy.id);
   };
 
+  // Decide face position and rotation:
+  // If the block is moving to the left/up-left, face is on +X. Otherwise on +Z.
+  const useFrontLeft = buddy.dir.x < 0 || buddy.dir.z > 0;
+  const facePosition: [number, number, number] = useFrontLeft ? [0.456, 0.05, 0] : [0, 0.05, 0.456];
+  const faceRotation: [number, number, number] = useFrontLeft ? [0, Math.PI / 2, 0] : [0, 0, 0];
+
+  const blockSkin = buddy.skin || (buddy.id !== 'menu_buddy' ? activeSkin : 'none');
+  const isCustomLevel = selectedWorld === 3 && levelGridCoords.length === 64; // Level 24
+
   return (
     <group
       ref={meshRef}
@@ -269,16 +362,38 @@ export const Buddy3DBlock: React.FC<Buddy3DBlockProps> = ({ buddy }) => {
           />
         </RoundedBox>
 
+        {/* Cute stubby legs/feet at bottom corners */}
+        {buddy.type !== 'portal' && (
+          <group position={[0, -0.45, 0]}>
+            <mesh position={[-0.3, -0.06, -0.3]}>
+              <cylinderGeometry args={[0.08, 0.08, 0.12, 8]} />
+              <meshPhysicalMaterial color={blockColor} roughness={roughness} clearcoat={clearcoat} />
+            </mesh>
+            <mesh position={[0.3, -0.06, -0.3]}>
+              <cylinderGeometry args={[0.08, 0.08, 0.12, 8]} />
+              <meshPhysicalMaterial color={blockColor} roughness={roughness} clearcoat={clearcoat} />
+            </mesh>
+            <mesh position={[-0.3, -0.06, 0.3]}>
+              <cylinderGeometry args={[0.08, 0.08, 0.12, 8]} />
+              <meshPhysicalMaterial color={blockColor} roughness={roughness} clearcoat={clearcoat} />
+            </mesh>
+            <mesh position={[0.3, -0.06, 0.3]}>
+              <cylinderGeometry args={[0.08, 0.08, 0.12, 8]} />
+              <meshPhysicalMaterial color={blockColor} roughness={roughness} clearcoat={clearcoat} />
+            </mesh>
+          </group>
+        )}
+
         {/* --- DYNAMIC CANVAS FACE TEXTURE --- */}
         {buddy.type !== 'chest' && buddy.type !== 'portal' && textureRef.current && (
-          <mesh position={[0, 0.05, 0.456]}>
+          <mesh position={facePosition} rotation={faceRotation}>
             <planeGeometry args={[0.82, 0.82]} />
             <meshBasicMaterial map={textureRef.current} transparent depthWrite={false} />
           </mesh>
         )}
 
-        {/* --- FLOAT GLOW ARROW --- */}
-        {buddy.type !== 'chest' && buddy.type !== 'portal' && (
+        {/* --- FLOAT GLOW ARROW (hidden for level 24 face arrows) --- */}
+        {buddy.type !== 'chest' && buddy.type !== 'portal' && !isCustomLevel && (
           <group position={[0, 0.58, 0]} rotation={arrowRotation}>
             {/* Arrow shaft */}
             <mesh position={[0, -0.05, 0]}>
@@ -373,36 +488,43 @@ export const Buddy3DBlock: React.FC<Buddy3DBlockProps> = ({ buddy }) => {
         )}
 
         {/* --- SKINS / HATS --- */}
-        {buddy.type !== 'chest' && activeSkin !== 'none' && (
+        {buddy.type !== 'chest' && blockSkin !== 'none' && (
           <group position={[0, 0.48, 0]}>
-            {activeSkin === 'wizard' && (
+            {blockSkin === 'wizard' && (
               <group position={[0, 0.12, 0]}>
                 {/* wizard cap */}
                 <mesh>
-                  <coneGeometry args={[0.35, 0.6, 12]} />
-                  <meshStandardMaterial color="#4a0e4e" roughness={0.5} />
+                  <coneGeometry args={[0.32, 0.6, 12]} />
+                  <meshStandardMaterial color="#1e4ed8" roughness={0.4} /> {/* Royal Blue Cap */}
                 </mesh>
                 <mesh position={[0, -0.28, 0]} rotation={[Math.PI / 2, 0, 0]}>
-                  <torusGeometry args={[0.32, 0.06, 6, 16]} />
-                  <meshStandardMaterial color="#300a35" />
+                  <torusGeometry args={[0.3, 0.05, 6, 16]} />
+                  <meshStandardMaterial color="#fbbf24" /> {/* Yellow Band */}
                 </mesh>
-                {/* Yellow stars */}
-                <mesh position={[0, 0.08, 0.18]}>
-                  <sphereGeometry args={[0.04]} />
-                  <meshBasicMaterial color="#ffea00" />
+                {/* Star on hat */}
+                <mesh position={[0, 0.08, 0.16]}>
+                  <sphereGeometry args={[0.045]} />
+                  <meshBasicMaterial color="#fbbf24" />
                 </mesh>
-                <mesh position={[0.1, -0.06, -0.16]}>
-                  <sphereGeometry args={[0.04]} />
-                  <meshBasicMaterial color="#ffea00" />
-                </mesh>
+                {/* Wizard Wand in left hand */}
+                <group position={[-0.52, -0.3, 0.28]} rotation={[0.2, 0.1, -0.45]}>
+                  <mesh>
+                    <cylinderGeometry args={[0.015, 0.015, 0.36]} />
+                    <meshStandardMaterial color="#854d0e" roughness={0.7} />
+                  </mesh>
+                  <mesh position={[0, 0.2, 0]}>
+                    <sphereGeometry args={[0.05, 8, 8]} />
+                    <meshBasicMaterial color="#fbbf24" />
+                  </mesh>
+                </group>
               </group>
             )}
 
-            {activeSkin === 'crown' && (
+            {blockSkin === 'crown' && (
               <group position={[0, 0.08, 0]}>
                 <mesh rotation={[Math.PI / 2, 0, 0]}>
                   <cylinderGeometry args={[0.26, 0.28, 0.15, 12, 1, true]} />
-                  <meshStandardMaterial color="#ffea00" metalness={0.9} roughness={0.1} side={THREE.DoubleSide} />
+                  <meshStandardMaterial color="#eab308" metalness={0.9} roughness={0.1} side={THREE.DoubleSide} />
                 </mesh>
                 {/* Crown spikes */}
                 {Array.from({ length: 6 }).map((_, sIdx) => {
@@ -411,14 +533,14 @@ export const Buddy3DBlock: React.FC<Buddy3DBlockProps> = ({ buddy }) => {
                   return (
                     <mesh key={sIdx} position={[Math.cos(angle) * rad, 0.12, Math.sin(angle) * rad]} rotation={[0, -angle, 0.2]}>
                       <coneGeometry args={[0.05, 0.14, 4]} />
-                      <meshStandardMaterial color="#ffea00" metalness={0.9} roughness={0.1} />
+                      <meshStandardMaterial color="#eab308" metalness={0.9} roughness={0.1} />
                     </mesh>
                   );
                 })}
               </group>
             )}
 
-            {activeSkin === 'cat' && (
+            {blockSkin === 'cat' && (
               <group position={[0, 0.05, 0]}>
                 {/* Left Ear */}
                 <mesh position={[-0.26, 0.08, 0]} rotation={[0, 0, 0.25]}>
@@ -433,7 +555,7 @@ export const Buddy3DBlock: React.FC<Buddy3DBlockProps> = ({ buddy }) => {
               </group>
             )}
 
-            {activeSkin === 'tophat' && (
+            {blockSkin === 'tophat' && (
               <group position={[0, 0.18, 0]}>
                 {/* Tophat cylinder */}
                 <mesh>
@@ -453,7 +575,7 @@ export const Buddy3DBlock: React.FC<Buddy3DBlockProps> = ({ buddy }) => {
               </group>
             )}
 
-            {activeSkin === 'chef' && (
+            {blockSkin === 'chef' && (
               <group position={[0, 0.16, 0]}>
                 <mesh>
                   <cylinderGeometry args={[0.24, 0.24, 0.24, 12]} />
@@ -466,7 +588,7 @@ export const Buddy3DBlock: React.FC<Buddy3DBlockProps> = ({ buddy }) => {
               </group>
             )}
 
-            {activeSkin === 'propeller' && (
+            {blockSkin === 'propeller' && (
               <group position={[0, 0.08, 0]}>
                 {/* Red cap */}
                 <mesh>
@@ -486,7 +608,7 @@ export const Buddy3DBlock: React.FC<Buddy3DBlockProps> = ({ buddy }) => {
               </group>
             )}
 
-            {activeSkin === 'rainbow' && (
+            {blockSkin === 'rainbow' && (
               <group position={[0, 0.22, 0]} rotation={[Math.PI / 2, 0, 0]}>
                 {/* Halo */}
                 <mesh>
@@ -496,7 +618,7 @@ export const Buddy3DBlock: React.FC<Buddy3DBlockProps> = ({ buddy }) => {
               </group>
             )}
 
-            {activeSkin === 'dragon' && (
+            {blockSkin === 'dragon' && (
               <group position={[0, 0.06, 0.08]} rotation={[0.1, 0, 0]}>
                 {/* Dragon horns */}
                 <mesh position={[-0.18, 0.14, -0.1]} rotation={[0.4, 0, -0.2]}>
@@ -515,7 +637,7 @@ export const Buddy3DBlock: React.FC<Buddy3DBlockProps> = ({ buddy }) => {
               </group>
             )}
 
-            {activeSkin === 'golden_crown' && (
+            {blockSkin === 'golden_crown' && (
               <group position={[0, 0.16, 0]}>
                 {/* Giant crown */}
                 <mesh rotation={[Math.PI / 2, 0, 0]}>
@@ -532,6 +654,83 @@ export const Buddy3DBlock: React.FC<Buddy3DBlockProps> = ({ buddy }) => {
                     </mesh>
                   );
                 })}
+              </group>
+            )}
+
+            {blockSkin === 'sprout' && (
+              <group position={[0, 0.45, 0]}>
+                {/* Stem */}
+                <mesh position={[0, 0.08, 0]}>
+                  <cylinderGeometry args={[0.015, 0.02, 0.16, 6]} />
+                  <meshStandardMaterial color="#55aa33" roughness={0.7} />
+                </mesh>
+                {/* Left Leaf */}
+                <mesh position={[-0.07, 0.15, 0]} rotation={[0, 0, 0.5]}>
+                  <boxGeometry args={[0.15, 0.03, 0.1]} />
+                  <meshStandardMaterial color="#8ae922" roughness={0.5} />
+                </mesh>
+                {/* Right Leaf */}
+                <mesh position={[0.07, 0.15, 0]} rotation={[0, 0, -0.5]}>
+                  <boxGeometry args={[0.15, 0.03, 0.1]} />
+                  <meshStandardMaterial color="#8ae922" roughness={0.5} />
+                </mesh>
+              </group>
+            )}
+
+            {blockSkin === 'sleep' && (
+              <group position={[0, 0.45, 0]} rotation={[0.2, 0, 0.15]}>
+                {/* Soft pompom cuff */}
+                <mesh rotation={[Math.PI / 2, 0, 0]}>
+                  <torusGeometry args={[0.25, 0.05, 8, 16]} />
+                  <meshStandardMaterial color="#ffffff" roughness={0.9} />
+                </mesh>
+                {/* Main purple body cone */}
+                <mesh position={[0, 0.15, -0.05]} rotation={[-0.3, 0, 0.1]}>
+                  <coneGeometry args={[0.22, 0.36, 12]} />
+                  <meshStandardMaterial color="#8844ff" roughness={0.6} />
+                </mesh>
+                {/* Pompom tail ball */}
+                <mesh position={[0.08, 0.3, -0.14]}>
+                  <sphereGeometry args={[0.07, 8, 8]} />
+                  <meshStandardMaterial color="#ffffff" roughness={0.9} />
+                </mesh>
+              </group>
+            )}
+
+            {blockSkin === 'flower' && (
+              <group position={[0, 0.46, 0]}>
+                {/* Vine Crown torus */}
+                <mesh rotation={[Math.PI / 2, 0, 0]}>
+                  <torusGeometry args={[0.28, 0.02, 6, 16]} />
+                  <meshStandardMaterial color="#166534" />
+                </mesh>
+                {/* Flower 1 */}
+                <mesh position={[0.24, 0.02, 0.1]} rotation={[0.1, 0, 0.2]}>
+                  <sphereGeometry args={[0.055]} />
+                  <meshStandardMaterial color="#ec4899" />
+                </mesh>
+                <mesh position={[0.24, 0.02, 0.1]} scale={[0.5, 0.5, 0.5]}>
+                  <sphereGeometry args={[0.045]} />
+                  <meshBasicMaterial color="#fbbf24" />
+                </mesh>
+                {/* Flower 2 */}
+                <mesh position={[-0.24, 0.02, -0.1]} rotation={[-0.1, 0, -0.2]}>
+                  <sphereGeometry args={[0.055]} />
+                  <meshStandardMaterial color="#f43f5e" />
+                </mesh>
+                <mesh position={[-0.24, 0.02, -0.1]} scale={[0.5, 0.5, 0.5]}>
+                  <sphereGeometry args={[0.045]} />
+                  <meshBasicMaterial color="#fbbf24" />
+                </mesh>
+                {/* Flower 3 */}
+                <mesh position={[0, 0.02, 0.26]} rotation={[0.2, 0, 0]}>
+                  <sphereGeometry args={[0.055]} />
+                  <meshStandardMaterial color="#fb7185" />
+                </mesh>
+                <mesh position={[0, 0.02, 0.26]} scale={[0.5, 0.5, 0.5]}>
+                  <sphereGeometry args={[0.045]} />
+                  <meshBasicMaterial color="#fbbf24" />
+                </mesh>
               </group>
             )}
           </group>

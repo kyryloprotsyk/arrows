@@ -46,7 +46,7 @@ const CameraController: React.FC = () => {
     const x = Math.cos(currentAngle.current) * distance;
     const z = Math.sin(currentAngle.current) * distance;
 
-    camera.position.set(x, height, z);
+    camera.position.set(x + currentLookAt.current.x, height + currentLookAt.current.y, z + currentLookAt.current.z);
     camera.lookAt(currentLookAt.current);
     camera.updateProjectionMatrix();
   });
@@ -175,8 +175,14 @@ const WeatherParticles: React.FC = () => {
 export const Game3DScene: React.FC = () => {
   const { selectedWorld, levelGridCoords, buddies } = useGameStore();
 
+  const isCustomLevel = selectedWorld === 3 && levelGridCoords.length === 64; // Level 24
+
   // Get island theme details
   const getIslandColors = () => {
+    if (isCustomLevel) {
+      // Glow blue top, dark cyber side
+      return { top: '#7dd3fc', side: '#0f172a' };
+    }
     switch (selectedWorld) {
       case 1: return { top: '#ff91d0', side: '#a865d4' }; // Jelly
       case 2: return { top: '#49e26a', side: '#82542a' }; // Dino Valley
@@ -192,7 +198,17 @@ export const Game3DScene: React.FC = () => {
 
   return (
     <div className="canvas3d-container">
-      <Canvas shadows gl={{ antialias: true, alpha: false, powerPreference: 'high-performance' }}>
+      {/* Cosmic background details */}
+      <div className="space-star-glow" style={{ top: '12%', left: '10%', color: '#38bdf8', fontSize: '20px' }}>✦</div>
+      <div className="space-star-glow" style={{ top: '8%', left: '45%', color: '#e879f9', fontSize: '14px' }}>✦</div>
+      <div className="space-star-glow" style={{ top: '24%', right: '12%', color: '#c084fc', fontSize: '24px' }}>✦</div>
+      <div className="space-star-glow" style={{ bottom: '15%', left: '6%', color: '#f472b6', fontSize: '18px' }}>✦</div>
+      <div className="space-star-glow" style={{ bottom: '22%', right: '14%', color: '#38bdf8', fontSize: '16px' }}>✦</div>
+      
+      <div className="space-planet" style={{ top: '6%', right: '8%', width: '90px', height: '90px', background: 'radial-gradient(circle at 30% 30%, #38bdf8, #1d4ed8, #0f172a)' }} />
+      <div className="space-planet" style={{ bottom: '20%', left: '8%', width: '70px', height: '70px', background: 'radial-gradient(circle at 30% 30%, #f472b6, #db2777, #4c0519)' }} />
+
+      <Canvas shadows gl={{ antialias: true, alpha: true, powerPreference: 'high-performance' }}>
         <OrthographicCamera
           makeDefault
           zoom={44} // Isometric view scale
@@ -243,6 +259,108 @@ export const Game3DScene: React.FC = () => {
               </RoundedBox>
             </group>
           ))}
+
+          {/* Level 24 Pink/Purple Neon glowing border around 8x8 slab */}
+          {isCustomLevel && (
+            <RoundedBox args={[8.16, 0.42, 8.16]} radius={0.12} position={[3.5, -0.21, 3.5]}>
+              <meshBasicMaterial color="#e879f9" />
+            </RoundedBox>
+          )}
+
+          {/* Level 24 Portal Archway */}
+          {isCustomLevel && (
+            <group position={[2, 0.05, -0.5]} rotation={[0, 0, 0]}>
+              {/* Left Pillar */}
+              <RoundedBox args={[0.06, 0.8, 0.06]} radius={0.01} position={[-0.32, 0.4, 0]}>
+                <meshBasicMaterial color="#38bdf8" />
+              </RoundedBox>
+              {/* Right Pillar */}
+              <RoundedBox args={[0.06, 0.8, 0.06]} radius={0.01} position={[0.32, 0.4, 0]}>
+                <meshBasicMaterial color="#f472b6" />
+              </RoundedBox>
+              {/* Arch Top */}
+              <RoundedBox args={[0.7, 0.06, 0.06]} radius={0.01} position={[0, 0.8, 0]}>
+                <meshBasicMaterial color="#e879f9" />
+              </RoundedBox>
+              {/* Vortex Center */}
+              <mesh position={[0, 0.4, 0]}>
+                <planeGeometry args={[0.58, 0.74]} />
+                <meshPhysicalMaterial
+                  color="#ec4899"
+                  transparent
+                  opacity={0.6}
+                  roughness={0.1}
+                  clearcoat={1.0}
+                  transmission={0.4}
+                />
+              </mesh>
+            </group>
+          )}
+
+          {/* Level 24 Pressure Plates & Floor Decals */}
+          {isCustomLevel && (
+            <group position={[0, 0.075, 0]}>
+              {/* Blue Circular Button */}
+              <mesh position={[3, 0, 1]} rotation={[-Math.PI / 2, 0, 0]}>
+                <cylinderGeometry args={[0.2, 0.2, 0.02, 16]} />
+                <meshBasicMaterial color="#38bdf8" />
+              </mesh>
+              
+              {/* Pink Button Plate */}
+              <mesh position={[4, 0, 3]}>
+                <boxGeometry args={[0.35, 0.02, 0.35]} />
+                <meshBasicMaterial color="#f472b6" />
+              </mesh>
+              
+              {/* Red Button Plate */}
+              <mesh position={[5, 0, 4]}>
+                <boxGeometry args={[0.35, 0.02, 0.35]} />
+                <meshBasicMaterial color="#f87171" />
+              </mesh>
+              
+              {/* Grey slot plate */}
+              <mesh position={[2, 0, 2]}>
+                <boxGeometry args={[0.38, 0.02, 0.38]} />
+                <meshBasicMaterial color="#94a3b8" />
+              </mesh>
+              
+              {/* Wizard Guide Arrow (-Z direction) */}
+              <group position={[0, 0, 1.75]}>
+                <mesh>
+                  <boxGeometry args={[0.06, 0.01, 1.8]} />
+                  <meshBasicMaterial color="#ffffff" transparent opacity={0.6} />
+                </mesh>
+                <mesh position={[0, 0, -0.9]} rotation={[Math.PI / 2, 0, 0]}>
+                  <coneGeometry args={[0.12, 0.25, 4]} />
+                  <meshBasicMaterial color="#ffffff" transparent opacity={0.6} />
+                </mesh>
+              </group>
+              
+              {/* Pink Guide Arrow to Portal (-Z direction) */}
+              <group position={[2, 0, 2.75]}>
+                <mesh>
+                  <boxGeometry args={[0.08, 0.01, 3.8]} />
+                  <meshBasicMaterial color="#ffffff" transparent opacity={0.7} />
+                </mesh>
+                <mesh position={[0, 0, -1.9]} rotation={[Math.PI / 2, 0, 0]}>
+                  <coneGeometry args={[0.16, 0.35, 4]} />
+                  <meshBasicMaterial color="#ffffff" transparent opacity={0.7} />
+                </mesh>
+              </group>
+              
+              {/* Light Blue Guide Arrow (+Z direction) */}
+              <group position={[4, 0, 5.25]}>
+                <mesh>
+                  <boxGeometry args={[0.06, 0.01, 1.8]} />
+                  <meshBasicMaterial color="#ffffff" transparent opacity={0.6} />
+                </mesh>
+                <mesh position={[0, 0, 0.9]} rotation={[-Math.PI / 2, 0, 0]}>
+                  <coneGeometry args={[0.12, 0.25, 4]} />
+                  <meshBasicMaterial color="#ffffff" transparent opacity={0.6} />
+                </mesh>
+              </group>
+            </group>
+          )}
         </group>
 
         {/* --- BUDDIES BLOCKS --- */}

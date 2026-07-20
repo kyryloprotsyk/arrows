@@ -14,6 +14,9 @@ export interface BuddyBlock extends BlockConfig {
   blinkTimer: number;
   isBlinking: boolean;
   rainbowHue: number;
+  skin?: string;
+  face?: string;
+  colorOverride?: string;
 }
 
 export type GameScreen = 'menu' | 'world_select' | 'level_select' | 'gameplay';
@@ -50,6 +53,8 @@ interface GameState {
   rotState: number; // 0-3: 90 deg rotations
   levelGridCoords: { x: number; z: number }[];
   floorHeights: Record<string, number>; // key: "x,z" -> min Y
+  levelName: string;
+  levelNumberText: string;
 
   // --- Modal & Overlay State ---
   activeModal: 'shop' | 'leaderboard' | 'profile' | 'daily' | 'help' | null;
@@ -130,6 +135,8 @@ export const useGameStore = create<GameState>((set, get) => ({
   rotState: 0,
   levelGridCoords: [],
   floorHeights: {},
+  levelName: '',
+  levelNumberText: '',
 
   // Overlays
   activeModal: null,
@@ -255,29 +262,76 @@ export const useGameStore = create<GameState>((set, get) => ({
     const world = store.selectedWorld;
     const level = store.selectedLevel;
 
-    const levelData = levelGenerator.generateLevel(world, level);
-    
-    // Grid footprint coords
-    const levelGridCoords: { x: number; z: number }[] = [];
-    for (const b of levelData.blocks) {
-      if (!levelGridCoords.some(c => c.x === b.x && c.z === b.z)) {
-        levelGridCoords.push({ x: b.x, z: b.z });
-      }
-    }
+    let levelGridCoords: { x: number; z: number }[] = [];
+    let floorHeights: Record<string, number> = {};
+    let buddies: BuddyBlock[] = [];
+    let movesLeft = 0;
+    let movesTotal = 0;
+    let parTotal = 0;
+    let levelName = '';
+    let levelNumberText = '';
 
-    // Floor heights for gravity
-    const floorHeights: Record<string, number> = {};
-    for (const b of levelData.blocks) {
-      const key = `${b.x},${b.z}`;
-      const current = floorHeights[key] ?? Infinity;
-      if (b.y < current) {
-        floorHeights[key] = b.y;
-      }
-    }
+    if (world === 3 && level === 4) {
+      // LEVEL 24: STARLIGHT PATH
+      levelName = 'STARLIGHT PATH';
+      levelNumberText = 'LEVEL 24';
 
-    // Map blocks to React state BuddyBlock objects
-    const buddies: BuddyBlock[] = levelData.blocks.map(cfg => {
-      return {
+      // Full 8x8 grid
+      for (let x = 0; x < 8; x++) {
+        for (let z = 0; z < 8; z++) {
+          levelGridCoords.push({ x, z });
+          floorHeights[`${x},${z}`] = 0;
+        }
+      }
+
+      const blockConfigs = [
+        { id: 'b_wizard', x: 0, y: 0, z: 3, dir: { x: 0, y: 0, z: -1 }, type: 'normal' as const, skin: 'wizard', face: 'happy' },
+        { id: 'b_sprout', x: 2, y: 0, z: 1, dir: { x: -1, y: 0, z: 0 }, type: 'normal' as const, skin: 'sprout', face: 'wink' },
+        { id: 'b_crown', x: 3, y: 0, z: 2, dir: { x: 0, y: 0, z: 1 }, type: 'normal' as const, skin: 'crown', face: 'happy' },
+        { id: 'b_sleep', x: 6, y: 0, z: 2, dir: { x: 0, y: 0, z: -1 }, type: 'normal' as const, skin: 'sleep', face: 'sleep' },
+        { id: 'b_red', x: 1, y: 0, z: 5, dir: { x: 1, y: 0, z: 0 }, type: 'normal' as const, skin: 'none', face: 'screaming', colorOverride: '#ff3b3b' },
+        { id: 'b_lightblue', x: 4, y: 0, z: 4, dir: { x: 0, y: 0, z: 1 }, type: 'normal' as const, skin: 'none', face: 'worried', colorOverride: '#00d5ff' },
+        { id: 'b_pink', x: 2, y: 0, z: 6, dir: { x: 0, y: 0, z: -1 }, type: 'normal' as const, skin: 'flower', face: 'happy', colorOverride: '#ff69b4' },
+        { id: 'b_orange', x: 6, y: 0, z: 5, dir: { x: 0, y: 0, z: -1 }, type: 'normal' as const, skin: 'none', face: 'happy', colorOverride: '#ffaa00' }
+      ];
+
+      buddies = blockConfigs.map(cfg => ({
+        ...cfg,
+        state: 'idle' as const,
+        animT: 0,
+        jellyScale: [1, 1, 1] as [number, number, number],
+        jellyOffset: [0, 0, 0] as [number, number, number],
+        blinkTimer: 1.5 + Math.random() * 3,
+        isBlinking: false,
+        rainbowHue: Math.random()
+      }));
+
+      movesLeft = 16; // 16 moves left of 22
+      movesTotal = 22;
+      parTotal = 8;
+    } else {
+      const levelData = levelGenerator.generateLevel(world, level);
+      levelName = levelData.worldName;
+      levelNumberText = `W${world} · L${level}`;
+
+      // Grid footprint coords
+      for (const b of levelData.blocks) {
+        if (!levelGridCoords.some(c => c.x === b.x && c.z === b.z)) {
+          levelGridCoords.push({ x: b.x, z: b.z });
+        }
+      }
+
+      // Floor heights for gravity
+      for (const b of levelData.blocks) {
+        const key = `${b.x},${b.z}`;
+        const current = floorHeights[key] ?? Infinity;
+        if (b.y < current) {
+          floorHeights[key] = b.y;
+        }
+      }
+
+      // Map blocks to React state BuddyBlock objects
+      buddies = levelData.blocks.map(cfg => ({
         ...cfg,
         state: cfg.type === 'chest' ? 'locked' : 'idle',
         animT: 0,
@@ -286,19 +340,25 @@ export const useGameStore = create<GameState>((set, get) => ({
         blinkTimer: 1.5 + Math.random() * 3,
         isBlinking: false,
         rainbowHue: Math.random()
-      };
-    });
+      }));
+
+      movesLeft = levelData.moveLimit;
+      movesTotal = levelData.moveLimit;
+      parTotal = levelData.par;
+    }
 
     set({
-      movesLeft: levelData.moveLimit,
-      movesTotal: levelData.moveLimit,
-      parTotal: levelData.par,
+      movesLeft,
+      movesTotal,
+      parTotal,
       comboCount: 0,
       lastEscapeTime: 0,
       buddies,
       rotState: 0,
       levelGridCoords,
       floorHeights,
+      levelName,
+      levelNumberText,
       victoryData: null,
       defeatData: null
     });
