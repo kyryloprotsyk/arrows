@@ -3,7 +3,7 @@ import Phaser from 'phaser';
 import { GameData } from '../utils/GameData';
 import { LeaderboardService } from '../utils/LeaderboardService';
 import { audio } from '../audio';
-import { createCartoonButton, blendColor } from '../utils/IsoHelper';
+import { createCartoonButton } from '../utils/IsoHelper';
 import { gsap } from 'gsap';
 
 export class ProfileScene extends Phaser.Scene {

@@ -101,7 +101,6 @@ export class WorldSelectScene extends Phaser.Scene {
   ) {
     const col  = hslToInt(world.hue, 85, 75); // bright cartoon cards
     const dark = hslToInt(world.hue, 80, 52); // accent/border lines
-    const glow = hslToInt(world.hue, 100, 85);
 
     const container = this.add.container(x, y + 10).setAlpha(0).setDepth(1);
 
@@ -119,7 +118,7 @@ export class WorldSelectScene extends Phaser.Scene {
       g.fillRoundedRect(-w / 2, -h / 2, w, h, 18);
 
       // Borders
-      g.lineStyle(isSelected = hover ? 3.5 : 2, unlocked ? dark : 0xffd8b3, 1.0);
+      g.lineStyle(hover ? 3.5 : 2, unlocked ? dark : 0xffd8b3, 1.0);
       g.strokeRoundedRect(-w / 2, -h / 2, w, h, 18);
 
       if (!unlocked) {
@@ -153,9 +152,10 @@ export class WorldSelectScene extends Phaser.Scene {
     }).setOrigin(0, 0.5);
 
     // Description / lock notice (Fredoka font)
+    const descColorStr = unlocked ? '#' + blendColor(col, 0x000000, 0.45).toString(16).padStart(6, '0') : '#bdc3c7';
     const descText = this.add.text(textX, textYOffset, unlocked ? world.desc : `🔒 Need ${world.starsNeeded} Stars`, {
       fontFamily: 'Fredoka, sans-serif', fontSize: descSize,
-      color: unlocked ? blendColor(col, 0x000000, 0.45) : '#bdc3c7',
+      color: descColorStr,
       fontStyle: 'bold'
     }).setOrigin(0, 0.5);
 
@@ -223,4 +223,3 @@ export class WorldSelectScene extends Phaser.Scene {
     }
   }
 }
-let isSelected = false;

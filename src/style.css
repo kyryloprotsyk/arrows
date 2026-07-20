@@ -70,4 +70,6 @@ body {
 
 /* ── Scrollbar hide (visible in desktop testing) ─────────────────────── */
 ::-webkit-scrollbar { display: none; }
-scrollbar-width: none;
+html, body {
+  scrollbar-width: none;
+}

@@ -1,7 +1,7 @@
 /* VictoryScene.ts — Cinematic level-clear screen with stars, confetti, rewards */
 import Phaser from 'phaser';
 import { GameData } from '../utils/GameData';
-import { hslToInt, getBlockPalette, TILE_W, TILE_H, BLOCK_H, drawHat, blendColor } from '../utils/IsoHelper';
+import { getBlockPalette, TILE_W, TILE_H, BLOCK_H, drawHat, blendColor } from '../utils/IsoHelper';
 import { audio } from '../audio';
 import { AdManager } from '../utils/AdManager';
 import confetti from 'canvas-confetti';
@@ -30,7 +30,7 @@ export class VictoryScene extends Phaser.Scene {
     this.triggerConfetti();
 
     // Animated isometric trophy block
-    const trophy = this.createTrophyBlock(W / 2, H * 0.17, world);
+    this.createTrophyBlock(W / 2, H * 0.17, world);
 
     // LEVEL CLEAR / DAILY COMPLETE heading (Fredoka font, bubbly & drop-shadowed)
     const clearTitle = isDaily ? '🔥 DAILY COMPLETE!' : '✨ LEVEL CLEAR! ✨';
@@ -313,7 +313,7 @@ export class VictoryScene extends Phaser.Scene {
   }
 
   private createStatsCard(cx: number, cy: number, reward: number, xpEarned?: number, userRank?: number) {
-    const w = Math.min(this.scale.width * 0.85, 340), h = statsCardHeight = 84;
+    const w = Math.min(this.scale.width * 0.85, 340), h = 84;
     const container = this.add.container(cx, cy).setAlpha(0);
 
     const bg = this.add.graphics();
@@ -433,5 +433,3 @@ export class VictoryScene extends Phaser.Scene {
     return container;
   }
 }
-// Local constant helper workaround
-let statsCardHeight = 84;
