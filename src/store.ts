@@ -1,13 +1,14 @@
 import { create } from 'zustand';
 import { levelGenerator } from './levelGenerator';
-import type { BlockConfig } from './levelGenerator';
+import type { BlockConfig, BlockType } from './levelGenerator';
 import { GameData } from './utils/GameData';
 import { LeaderboardService } from './utils/LeaderboardService';
 import { audio } from './audio';
 import { SKIN_LIST } from './skins';
+import confetti from 'canvas-confetti';
 
 export interface BuddyBlock extends BlockConfig {
-  state: 'idle' | 'bump' | 'escaping' | 'locked' | 'anticipation' | 'wiggle';
+  state: 'idle' | 'bump' | 'escaping' | 'locked' | 'anticipation' | 'wiggle' | 'cheering';
   animT: number;
   jellyScale: [number, number, number];
   jellyOffset: [number, number, number];
@@ -77,6 +78,25 @@ interface GameState {
   // --- Global UI Messages ---
   toastMessage: string | null;
 
+  undoStack: Array<{
+    buddies: BuddyBlock[];
+    movesLeft: number;
+    comboCount: number;
+    lastEscapeTime: number;
+  }>;
+
+  rescuedBuddies: Array<{
+    id: string;
+    type: BlockType;
+    colorOverride?: string;
+    skin?: string;
+    face?: string;
+    x: number;
+    y: number;
+    z: number;
+    scale: [number, number, number];
+  }>;
+
   // --- Actions ---
   setScreen: (screen: GameScreen) => void;
   selectWorld: (world: number) => void;
@@ -84,7 +104,7 @@ interface GameState {
   setMuted: (v: boolean) => void;
   setModal: (modal: 'shop' | 'leaderboard' | 'profile' | 'daily' | 'help' | null) => void;
   showToast: (msg: string) => void;
-
+  
   // Profile actions
   updateProfile: (username: string, avatar: string) => void;
 
@@ -97,6 +117,7 @@ interface GameState {
   resetLevel: () => void;
   rotateView: (dir: number) => void;
   tapBlock: (id: string) => void;
+  undoMove: () => void;
   addExtraMoves: (count: number) => void;
   triggerNextLevel: () => void;
   triggerDefeatRetry: () => void;
@@ -133,6 +154,8 @@ export const useGameStore = create<GameState>((set, get) => ({
   comboCount: 0,
   lastEscapeTime: 0,
   buddies: [],
+  undoStack: [],
+  rescuedBuddies: [],
   rotState: 0,
   levelGridCoords: [],
   floorHeights: {},
@@ -355,6 +378,8 @@ export const useGameStore = create<GameState>((set, get) => ({
       comboCount: 0,
       lastEscapeTime: 0,
       buddies,
+      undoStack: [],
+      rescuedBuddies: [],
       rotState: 0,
       levelGridCoords,
       floorHeights,
@@ -422,6 +447,7 @@ export const useGameStore = create<GameState>((set, get) => ({
     // Locked chest: bump wiggling
     if (buddy.state === 'locked') {
       audio.playMaterialBump(store.selectedWorld);
+      if (typeof navigator !== 'undefined' && navigator.vibrate) navigator.vibrate(40);
       get().showToast('🔒 Chest is locked! Find the key first.');
       
       // Update state for wiggle animation
@@ -452,12 +478,19 @@ export const useGameStore = create<GameState>((set, get) => ({
 
     if (buddy.state !== 'idle') return;
 
-    // Use a move
-    const newMovesLeft = store.movesLeft - 1;
-    set({ movesLeft: newMovesLeft });
-
     // Bomb Block Explosion
     if (buddy.type === 'bomb') {
+      const snapshot = get().buddies.map(b => ({ ...b }));
+      set(state => ({
+        undoStack: [...state.undoStack, {
+          buddies: snapshot,
+          movesLeft: state.movesLeft,
+          comboCount: state.comboCount,
+          lastEscapeTime: state.lastEscapeTime
+        }],
+        movesLeft: state.movesLeft - 1
+      }));
+
       audio.playExplosion();
       
       // Explode animation on target
@@ -558,6 +591,7 @@ export const useGameStore = create<GameState>((set, get) => ({
       if (!freeDir) {
         // Blocked bump
         audio.playMaterialBump(store.selectedWorld);
+        if (typeof navigator !== 'undefined' && navigator.vibrate) navigator.vibrate(40);
         buddies[buddyIndex] = {
           ...buddy,
           state: 'bump',
@@ -582,6 +616,7 @@ export const useGameStore = create<GameState>((set, get) => ({
       const path = checkEscapePathHelper(get().buddies, buddy, escDir);
       if (path.blocked) {
         audio.playMaterialBump(store.selectedWorld);
+        if (typeof navigator !== 'undefined' && navigator.vibrate) navigator.vibrate(40);
         
         // Bump displacement wiggle
         buddies[buddyIndex] = {
@@ -605,6 +640,17 @@ export const useGameStore = create<GameState>((set, get) => ({
     }
 
     // SOLVED - Escape path is clear!
+    const snapshot = get().buddies.map(b => ({ ...b }));
+    set(state => ({
+      undoStack: [...state.undoStack, {
+        buddies: snapshot,
+        movesLeft: state.movesLeft,
+        comboCount: state.comboCount,
+        lastEscapeTime: state.lastEscapeTime
+      }],
+      movesLeft: state.movesLeft - 1
+    }));
+
     // Start anticipation/squash animation
     buddies[buddyIndex] = {
       ...buddy,
@@ -663,14 +709,57 @@ export const useGameStore = create<GameState>((set, get) => ({
 
       // Remove after launch complete
       setTimeout(() => {
-        set(state => ({
-          buddies: state.buddies.filter(b => b.id !== id)
-        }));
+        const escapedBuddy = get().buddies.find(b => b.id === id);
+        set(state => {
+          const nextRescued = [...state.rescuedBuddies];
+          if (escapedBuddy) {
+            const slotIndex = nextRescued.length;
+            const angle = slotIndex * 0.8;
+            const radius = 0.5 + Math.random() * 0.3;
+            const rx = 3.5 + Math.cos(angle) * radius;
+            const rz = 9.0 + Math.sin(angle) * radius;
+            nextRescued.push({
+              id: escapedBuddy.id,
+              type: escapedBuddy.type,
+              colorOverride: escapedBuddy.colorOverride,
+              skin: escapedBuddy.skin,
+              face: escapedBuddy.face || 'happy',
+              x: rx,
+              y: -1.8,
+              z: rz,
+              scale: [0.55, 0.55, 0.55]
+            });
+          }
+          return {
+            buddies: state.buddies.filter(b => b.id !== id),
+            rescuedBuddies: nextRescued
+          };
+        });
         get().applyGravity();
         get().checkEndConditions();
       }, 150);
 
     }, 150);
+  },
+
+  undoMove: () => {
+    const store = get();
+    if (store.victoryData || store.defeatData) return;
+    if (store.undoStack.length === 0) {
+      store.showToast('Nothing to undo! ↩️');
+      return;
+    }
+    audio.playTap();
+    const nextStack = [...store.undoStack];
+    const previousState = nextStack.pop()!;
+    set({
+      buddies: previousState.buddies,
+      movesLeft: previousState.movesLeft,
+      comboCount: previousState.comboCount,
+      lastEscapeTime: previousState.lastEscapeTime,
+      undoStack: nextStack
+    });
+    store.showToast('Move undone! ↩️');
   },
 
   applyGravity: () => {
@@ -736,6 +825,16 @@ export const useGameStore = create<GameState>((set, get) => ({
     if (remaining.length === 0) {
       audio.stopBGM();
       audio.playVictory();
+      
+      // Trigger mobile victory haptic pulse and canvas-confetti explosion
+      if (typeof navigator !== 'undefined' && navigator.vibrate) {
+        navigator.vibrate([100, 50, 100, 50, 150]);
+      }
+      confetti({
+        particleCount: 140,
+        spread: 80,
+        origin: { y: 0.6 }
+      });
       
       const ratio = store.movesLeft / store.movesTotal;
       const stars = ratio >= 0.4 ? 3 : ratio >= 0.15 ? 2 : 1;

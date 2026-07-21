@@ -29,7 +29,6 @@ function v3scale(v: Vec3, s: number): Vec3 { return { x: v.x * s, y: v.y * s, z:
 function v3sub(a: Vec3, b: Vec3): Vec3 { return { x: a.x - b.x, y: a.y - b.y, z: a.z - b.z }; }
 function v3clone(v: Vec3): Vec3 { return { x: v.x, y: v.y, z: v.z }; }
 
-
 const DIRS: Vec3[] = [
   v3(1, 0, 0), v3(-1, 0, 0),
   v3(0, 1, 0), v3(0, -1, 0),
@@ -56,7 +55,6 @@ class LevelGenerator {
     else if (worldIndex >= 6) multiplier = 1.15;
 
     const moveLimit = Math.max(12, Math.round(blocks.length * multiplier + 4));
-    // Dynamic par target is tight (approx. 70% of blocks count, representing a smart puzzle solution)
     const par = Math.max(4, Math.round(blocks.length * 0.70));
 
     return {
@@ -72,224 +70,171 @@ class LevelGenerator {
     const coords: Vec3[] = [];
 
     if (w === 1) {
-      // World 1: Jelly Hills (Warm-up & Flowing Curves)
+      // World 1: Jelly Hills (Clean, Bubbly Intro Shapes — 6 to 12 blocks)
       if (l === 1) {
-        // Level 1: Compact Cross (7 blocks)
+        // Compact Cross (7 blocks)
         coords.push(v3(0, 0, 0));
         for (const d of DIRS) coords.push(v3clone(d));
       } else if (l === 2) {
-        // Level 2: Intertwining Double Ring (12 blocks)
-        for (let i = 0; i < 6; i++) {
-          const a = (i / 6) * Math.PI * 2;
-          coords.push(v3(Math.round(Math.cos(a) * 1.5), Math.round(Math.sin(a) * 1.5), 0));
-          coords.push(v3(Math.round(Math.cos(a) * 1.5), 0, Math.round(Math.sin(a) * 1.5)));
+        // Floating Ring (8 blocks)
+        for (let i = 0; i < 8; i++) {
+          const a = (i / 8) * Math.PI * 2;
+          coords.push(v3(Math.round(Math.cos(a) * 1.3), 0, Math.round(Math.sin(a) * 1.3)));
         }
       } else if (l === 3) {
-        // Level 3: Stepped Mini Fortress (14 blocks)
+        // Mini pyramid (9 blocks)
         for (let x = -1; x <= 1; x++) {
           for (let z = -1; z <= 1; z++) {
-            coords.push(v3(x, -1, z));
-          }
-        }
-        for (let x = 0; x <= 1; x++) {
-          for (let z = 0; z <= 1; z++) {
-            coords.push(v3(x - 0.5, 0, z - 0.5));
+            if (Math.abs(x) + Math.abs(z) <= 1) coords.push(v3(x, 0, z));
           }
         }
         coords.push(v3(0, 1, 0));
+        coords.push(v3(0, -1, 0));
       } else if (l === 4) {
-        // Level 4: Hollow Cube Cage (26 blocks)
-        for (let x = -1; x <= 1; x++) {
-          for (let y = -1; y <= 1; y++) {
-            for (let z = -1; z <= 1; z++) {
-              if (x !== 0 || y !== 0 || z !== 0) {
-                coords.push(v3(x, y, z));
-              }
-            }
-          }
-        }
+        // Tiny Hollow Cube Cage (10 blocks)
+        coords.push(v3(-1, 0, -1), v3(1, 0, -1));
+        coords.push(v3(-1, 0, 1), v3(1, 0, 1));
+        coords.push(v3(0, 1, 0), v3(0, -1, 0));
+        coords.push(v3(-1, -1, 0), v3(1, 1, 0));
+        coords.push(v3(0, 0, -1), v3(0, 0, 1));
       } else {
-        // Level 5: Double Helix Columns (24 blocks)
-        for (let y = -3; y <= 3; y++) {
-          const a = (y / 3) * Math.PI;
-          coords.push(v3(Math.round(Math.cos(a) * 1.3), y, Math.round(Math.sin(a) * 1.3)));
-          coords.push(v3(Math.round(Math.cos(a + Math.PI) * 1.3), y, Math.round(Math.sin(a + Math.PI) * 1.3)));
+        // Helix Spire (10 blocks)
+        for (let y = -2; y <= 2; y++) {
+          const a = (y / 2) * Math.PI;
+          coords.push(v3(Math.round(Math.cos(a)), y, Math.round(Math.sin(a))));
+          coords.push(v3(Math.round(Math.cos(a + Math.PI)), y, Math.round(Math.sin(a + Math.PI))));
         }
       }
 
     } else if (w === 2) {
-      // World 2: Dino Valley (Increased Difficulty & Bombs)
+      // World 2: Dino Valley (Prehistoric Shapes — 9 to 14 blocks)
       if (l === 1) {
-        // Level 1: Lava Wall with a Bomb Core (22 blocks)
-        for (let x = -2; x <= 2; x++) {
-          for (let y = -2; y <= 2; y++) {
-            if (Math.abs(x) + Math.abs(y) <= 3) {
-              coords.push(v3(x, y, 0));
-            }
+        // Claw Plate (9 blocks)
+        for (let x = -1; x <= 1; x++) {
+          for (let z = -1; z <= 1; z++) {
+            coords.push(v3(x, 0, z));
           }
         }
       } else if (l === 2) {
-        // Level 2: Vault Ring enclosing a chest (24 blocks)
+        // Enclosure Vault (10 blocks)
         coords.push(v3(0, 0, 0));
-        for (let i = 0; i < 12; i++) {
-          const a = (i / 12) * Math.PI * 2;
-          coords.push(v3(Math.round(Math.cos(a) * 2), 0, Math.round(Math.sin(a) * 2)));
-        }
-        for (let i = 0; i < 11; i++) {
-          const a = (i / 11) * Math.PI * 2;
-          coords.push(v3(Math.round(Math.cos(a) * 3), 0, Math.round(Math.sin(a) * 3)));
+        coords.push(v3(0, 1, 0));
+        for (let i = 0; i < 8; i++) {
+          const a = (i / 8) * Math.PI * 2;
+          coords.push(v3(Math.round(Math.cos(a) * 1.5), 0, Math.round(Math.sin(a) * 1.5)));
         }
       } else if (l === 3) {
-        // Level 3: Rotator Turbine with spinning arms (28 blocks)
-        for (let x = 0; x <= 1; x++) {
-          for (let z = 0; z <= 1; z++) {
-            coords.push(v3(x - 0.5, 0, z - 0.5));
-          }
-        }
-        for (let i = 2; i <= 7; i++) {
+        // Propeller turbine (11 blocks)
+        coords.push(v3(0, 0, 0));
+        for (let i = 1; i <= 2; i++) {
           coords.push(v3(i, 0, 0));
           coords.push(v3(-i, 0, 0));
           coords.push(v3(0, 0, i));
           coords.push(v3(0, 0, -i));
+          coords.push(v3(0, i, 0));
         }
       } else if (l === 4) {
-        // Level 4: Dino Claw footprint (32 blocks)
-        for (let x = -1; x <= 1; x++) for (let z = -1; z <= 1; z++) coords.push(v3(x, 0, z));
-        for (let x = -1; x <= 1; x++) for (let z = -1; z <= 1; z++) coords.push(v3(x, -2, z));
-        for (let i = 1; i <= 4; i++) {
-          coords.push(v3(-i, i, 0));
-          coords.push(v3(0, i + 1, 0));
-          coords.push(v3(i, i, 0));
+        // Dino Claw footprint (12 blocks)
+        for (let x = -1; x <= 1; x++) {
+          coords.push(v3(x, 0, -1));
+          coords.push(v3(x, 0, 1));
+          coords.push(v3(x, 1, 0));
+          coords.push(v3(x, -1, 0));
         }
       } else {
-        // Level 5: Mesozoic Castle Ramparts (38 blocks)
-        for (let x = -2; x <= 2; x++) for (let z = -2; z <= 2; z++) {
-          if (Math.abs(x) === 2 || Math.abs(z) === 2) coords.push(v3(x, -1, z));
+        // Mini Castle Ramparts (13 blocks)
+        for (let x = -1; x <= 1; x++) {
+          for (let z = -1; z <= 1; z++) {
+            if (x !== 0 || z !== 0) coords.push(v3(x, 0, z));
+          }
         }
-        for (let x = -1; x <= 1; x++) for (let z = -1; z <= 1; z++) {
-          if (Math.abs(x) === 1 || Math.abs(z) === 1) coords.push(v3(x, 0, z));
-        }
-        for (let y = -2; y <= 2; y++) {
-          coords.push(v3(0, y, 0));
-        }
-        coords.push(v3(-2, 0, -2)); coords.push(v3(2, 0, -2));
-        coords.push(v3(-2, 0, 2));  coords.push(v3(2, 0, 2));
-        coords.push(v3(-2, 1, -2)); coords.push(v3(2, 1, -2));
-        coords.push(v3(-2, 1, 2));  coords.push(v3(2, 1, 2));
-        coords.push(v3(0, 2, 1));
+        coords.push(v3(0, 0, 0));
+        coords.push(v3(0, 1, 0));
+        coords.push(v3(-1, 1, -1));
+        coords.push(v3(1, 1, 1));
       }
 
     } else if (w === 3) {
-      // World 3: Cosmo Station (High complexity & Rainbow panels)
+      // World 3: Cosmo Station (Cyber Orbiters — 12 to 15 blocks)
       if (l === 1) {
-        // Level 1: Satellite Dish with Orbiting Rainbow Panels (30 blocks)
-        for (let y = -2; y <= 2; y++) coords.push(v3(0, y, 0));
-        for (let i = 0; i < 8; i++) {
-          const a = (i / 8) * Math.PI * 2;
-          coords.push(v3(Math.round(Math.cos(a) * 1.5), 1, Math.round(Math.sin(a) * 1.5)));
+        // Floating satellite dish (12 blocks)
+        for (let y = -1; y <= 1; y++) coords.push(v3(0, y, 0));
+        for (let i = 0; i < 9; i++) {
+          const a = (i / 9) * Math.PI * 2;
+          coords.push(v3(Math.round(Math.cos(a) * 1.5), 0, Math.round(Math.sin(a) * 1.5)));
         }
-        for (let i = 0; i < 12; i++) {
-          const a = (i / 12) * Math.PI * 2;
-          coords.push(v3(Math.round(Math.cos(a) * 3), 0, Math.round(Math.sin(a) * 3)));
-        }
-        coords.push(v3(-4, 0, 0)); coords.push(v3(4, 0, 0));
-        coords.push(v3(0, 0, -4)); coords.push(v3(0, 0, 4));
-        coords.push(v3(0, 3, 0));
       } else if (l === 2) {
-        // Level 2: Binary Star Cores (34 blocks)
-        for (let y = -1; y <= 1; y++) {
+        // Binary star cores (12 blocks)
+        for (let y = -1; y <= 0; y++) {
           for (let z = -1; z <= 1; z++) {
-            coords.push(v3(-2, y, z));
-            coords.push(v3(2, y, z));
+            coords.push(v3(-1.5, y, z));
+            coords.push(v3(1.5, y, z));
           }
         }
-        for (let x = -1; x <= 1; x++) {
-          coords.push(v3(x, 0, 0));
-          coords.push(v3(x, 0, 1));
-          coords.push(v3(x, 0, -1));
-        }
-        for (let i = 0; i < 7; i++) {
-          coords.push(v3(-4, Math.round(Math.sin(i) * 1.5), Math.round(Math.cos(i) * 1.5)));
-          coords.push(v3(4, Math.round(Math.sin(i) * 1.5), Math.round(Math.cos(i) * 1.5)));
-        }
       } else if (l === 3) {
-        // Level 3: Space Station Cylinder Capsule (40 blocks)
-        for (let y = -2; y <= 2; y++) {
-          for (let i = 0; i < 8; i++) {
-            const a = (i / 8) * Math.PI * 2;
-            coords.push(v3(Math.round(Math.cos(a) * 2), y, Math.round(Math.sin(a) * 2)));
+        // Space Station Cylinder (12 blocks)
+        for (let y = -1; y <= 1; y++) {
+          for (let i = 0; i < 4; i++) {
+            const a = (i / 4) * Math.PI * 2;
+            coords.push(v3(Math.round(Math.cos(a)), y, Math.round(Math.sin(a))));
           }
         }
       } else if (l === 4) {
-        // Level 4: Dense Vortex Helix (44 blocks)
-        for (let i = 0; i < 22; i++) {
-          const a = (i / 11) * Math.PI * 4;
-          coords.push(v3(Math.round(Math.cos(a) * 2), Math.round(i / 3) - 3, Math.round(Math.sin(a) * 2)));
-          coords.push(v3(Math.round(Math.cos(a + Math.PI) * 2), Math.round(i / 3) - 3, Math.round(Math.sin(a + Math.PI) * 2)));
+        // Vortex helix (12 blocks)
+        for (let i = 0; i < 12; i++) {
+          const a = (i / 6) * Math.PI * 2;
+          coords.push(v3(Math.round(Math.cos(a)), Math.round(i / 4) - 1, Math.round(Math.sin(a))));
         }
       } else {
-        // Level 5: Nested Hyper-Cube Matrix (56 blocks)
-        for (let x = -2; x <= 2; x++) {
-          for (let y = -2; y <= 2; y++) {
-            for (let z = -2; z <= 2; z++) {
-              if (Math.abs(x) === 2 || Math.abs(y) === 2 || Math.abs(z) === 2) {
+        // Cosmo Core matrix (14 blocks)
+        for (let x = -1; x <= 1; x++) {
+          for (let y = -1; y <= 1; y++) {
+            for (let z = -1; z <= 1; z++) {
+              if (Math.abs(x) + Math.abs(y) + Math.abs(z) === 1) {
                 coords.push(v3(x, y, z));
               }
             }
           }
         }
+        coords.push(v3(0, 0, 0));
+        coords.push(v3(1, 1, 1), v3(-1, -1, -1));
       }
 
     } else if (w === 4) {
-      // World 4: Coral Reef (Interlocking chains & Whirlpools)
+      // World 4: Coral Reef (Reef Chains — 12 to 16 blocks)
       if (l === 1) {
-        // Level 1: Coral Branch tree layout (32 blocks)
-        for (let y = -3; y <= 2; y++) coords.push(v3(0, y, 0));
-        for (let i = 1; i <= 4; i++) {
-          coords.push(v3(i, i - 1, 0)); coords.push(v3(i, i - 1, 1));
-          coords.push(v3(-i, i - 2, 0)); coords.push(v3(-i, i - 2, -1));
-          coords.push(v3(0, i - 1, i)); coords.push(v3(1, i - 1, i));
-          coords.push(v3(0, i - 2, -i)); coords.push(v3(-1, i - 2, -i));
-        }
-        coords.push(v3(0, 3, 0)); coords.push(v3(1, 3, 0));
+        // Coral branches (12 blocks)
+        for (let y = -2; y <= 2; y++) coords.push(v3(0, y, 0));
+        coords.push(v3(1, 1, 0), v3(2, 2, 0));
+        coords.push(v3(-1, -1, 0), v3(-2, -2, 0));
+        coords.push(v3(0, 0, 1), v3(0, 1, 2));
+        coords.push(v3(0, -1, -1));
       } else if (l === 2) {
-        // Level 2: Spiraling Inward Whirlpool Cone (38 blocks)
-        for (let i = 0; i < 38; i++) {
-          const a = (i / 8) * Math.PI * 2;
-          const r = 3 - (i / 38) * 2;
-          coords.push(v3(Math.round(Math.cos(a) * r), Math.round(i / 6) - 3, Math.round(Math.sin(a) * r)));
+        // Whirlpool (12 blocks)
+        for (let i = 0; i < 12; i++) {
+          const a = (i / 4) * Math.PI * 2;
+          const r = 2 - (i / 12);
+          coords.push(v3(Math.round(Math.cos(a) * r), Math.round(i / 4) - 1, Math.round(Math.sin(a) * r)));
         }
       } else if (l === 3) {
-        // Level 3: Dense Anchor with twin hooks (42 blocks)
-        for (let y = -3; y <= 3; y++) {
-          coords.push(v3(0, y, 0));
-          coords.push(v3(0, y, 1));
-        }
-        for (let x = -3; x <= 3; x++) coords.push(v3(x, 2, 0));
-        for (let x = -3; x <= 3; x++) {
-          if (x !== 0) {
-            const h = Math.abs(x) === 3 ? -1 : Math.abs(x) === 2 ? -2 : -3;
-            coords.push(v3(x, h, 0));
-            coords.push(v3(x, h + 1, 0));
-          }
-        }
-        coords.push(v3(0, -4, 0));
-        coords.push(v3(1, -4, 0));
-        coords.push(v3(-1, -4, 0));
+        // Anchor (13 blocks)
+        for (let y = -2; y <= 1; y++) coords.push(v3(0, y, 0));
+        for (let x = -2; x <= 2; x++) coords.push(v3(x, 1, 0));
+        coords.push(v3(-2, -1, 0), v3(2, -1, 0));
+        coords.push(v3(-1, -2, 0), v3(1, -2, 0));
       } else if (l === 4) {
-        // Level 4: Interlocking Chain rings (48 blocks)
-        for (let i = 0; i < 16; i++) {
-          const a = (i / 16) * Math.PI * 2;
-          coords.push(v3(Math.round(Math.cos(a) * 2.2) - 1.5, Math.round(Math.sin(a) * 2.2), 0));
-          coords.push(v3(Math.round(Math.cos(a) * 2.2) + 1.5, 0, Math.round(Math.sin(a) * 2.2)));
-          coords.push(v3(0, Math.round(Math.cos(a) * 2.2), Math.round(Math.sin(a) * 2.2) + 1.5));
+        // Chain Rings (14 blocks)
+        for (let i = 0; i < 7; i++) {
+          const a = (i / 7) * Math.PI * 2;
+          coords.push(v3(Math.round(Math.cos(a) * 1.5) - 1, Math.round(Math.sin(a) * 1.5), 0));
+          coords.push(v3(Math.round(Math.cos(a) * 1.5) + 1, 0, Math.round(Math.sin(a) * 1.5)));
         }
       } else {
-        // Level 5: Porous Reef Wall (58 blocks)
-        for (let x = -3; x <= 3; x++) {
+        // Reef Wall (15 blocks)
+        for (let x = -1; x <= 1; x++) {
           for (let y = -1; y <= 1; y++) {
-            for (let z = -2; z <= 2; z++) {
-              if ((x + y + z) % 3 !== 0) {
+            for (let z = -1; z <= 1; z++) {
+              if ((x + y + z) % 2 === 0) {
                 coords.push(v3(x, y, z));
               }
             }
@@ -298,123 +243,101 @@ class LevelGenerator {
       }
 
     } else if (w === 5) {
-      // World 5: Ice Castle (Chilled spires, castles & double keys)
+      // World 5: Ice Castle (Chilled Spires — 13 to 18 blocks)
       if (l === 1) {
-        // Level 1: Frost Spire tower (36 blocks)
-        for (let y = -3; y <= 3; y++) {
-          const r = Math.max(1, 3 - Math.abs(y));
-          for (let i = 0; i < 6; i++) {
-            const a = (i / 6) * Math.PI * 2;
+        // Frost Spire (14 blocks)
+        for (let y = -2; y <= 2; y++) {
+          const r = y === 0 ? 2 : 1;
+          for (let i = 0; i < 4; i++) {
+            const a = (i / 4) * Math.PI * 2;
             coords.push(v3(Math.round(Math.cos(a) * r), y, Math.round(Math.sin(a) * r)));
           }
         }
+        coords.push(v3(0, 3, 0), v3(0, -3, 0));
       } else if (l === 2) {
-        // Level 2: Double Tower gates (40 blocks)
-        for (let y = -2; y <= 2; y++) {
-          coords.push(v3(-2.5, y, -0.5)); coords.push(v3(-2.5, y, 0.5));
-          coords.push(v3(-1.5, y, -0.5)); coords.push(v3(-1.5, y, 0.5));
-          coords.push(v3(2.5, y, -0.5));  coords.push(v3(2.5, y, 0.5));
-          coords.push(v3(1.5, y, -0.5));  coords.push(v3(1.5, y, 0.5));
+        // Double Tower (14 blocks)
+        for (let y = -1; y <= 1; y++) {
+          coords.push(v3(-1.5, y, -0.5), v3(-1.5, y, 0.5));
+          coords.push(v3(1.5, y, -0.5), v3(1.5, y, 0.5));
         }
+        coords.push(v3(-1.5, 2, 0), v3(1.5, 2, 0));
       } else if (l === 3) {
-        // Level 3: U-shaped Throne Room (45 blocks)
-        for (let x = -2; x <= 2; x++) {
-          for (let z = -2; z <= 2; z++) {
-            if (z === -2 || x === -2 || x === 2) {
-              for (let y = -1; y <= 1; y++) {
-                coords.push(v3(x, y, z));
-              }
+        // Throne Room (15 blocks)
+        for (let x = -1; x <= 1; x++) {
+          for (let z = -1; z <= 1; z++) {
+            if (z === -1 || x === -1 || x === 1) {
+              coords.push(v3(x, -1, z));
+              coords.push(v3(x, 0, z));
+              coords.push(v3(x, 1, z));
             }
           }
         }
       } else if (l === 4) {
-        // Level 4: Grid-based Glacier Labyrinth (52 blocks)
+        // Glacier Labyrinth (16 blocks)
         for (let x = -2; x <= 2; x++) {
-          for (let y = -1; y <= 1; y++) {
-            for (let z = -2; z <= 2; z++) {
-              if ((x * z + y) % 2 === 0) {
-                coords.push(v3(x, y, z));
-              }
+          for (let z = -2; z <= 2; z++) {
+            if ((x + z) % 2 === 0) {
+              coords.push(v3(x, 0, z));
             }
           }
         }
       } else {
-        // Level 5: Crystal Palace dome (64 blocks)
-        for (let y = -2; y <= 2; y++) {
-          const r = y === 2 ? 1.5 : y === 1 ? 2.5 : 3.5;
-          const steps = y === 2 ? 8 : y === 1 ? 12 : 16;
-          for (let i = 0; i < steps; i++) {
-            const a = (i / steps) * Math.PI * 2;
-            coords.push(v3(Math.round(Math.cos(a) * r), y, Math.round(Math.sin(a) * r)));
-          }
-        }
-        for (let y = -1; y <= 3; y++) {
-          coords.push(v3(-3, y, -3)); coords.push(v3(3, y, -3));
-          coords.push(v3(-3, y, 3));  coords.push(v3(3, y, 3));
-        }
-      }
-
-    } else {
-      // World 6: Volcanic Land (Extreme structures & Doomsday challenges)
-      if (l === 1) {
-        // Level 1: Spherical Magma Shell around core (40 blocks)
-        for (let x = -2; x <= 2; x++) {
-          for (let y = -2; y <= 2; y++) {
-            for (let z = -2; z <= 2; z++) {
-              const d = Math.hypot(x, y, z);
-              if (d > 1.8 && d < 2.8) {
-                coords.push(v3(x, y, z));
-              }
-            }
-          }
-        }
-      } else if (l === 2) {
-        // Level 2: Stepped Lava Pit concentric rings (46 blocks)
-        for (let i = 0; i < 16; i++) {
-          const a = (i / 16) * Math.PI * 2;
-          coords.push(v3(Math.round(Math.cos(a) * 3), 1, Math.round(Math.sin(a) * 3)));
-        }
+        // Dome Castle (18 blocks)
         for (let i = 0; i < 12; i++) {
           const a = (i / 12) * Math.PI * 2;
           coords.push(v3(Math.round(Math.cos(a) * 2), 0, Math.round(Math.sin(a) * 2)));
         }
+        for (let y = -1; y <= 1; y++) {
+          coords.push(v3(-1, y, -1), v3(1, y, 1));
+        }
+      }
+
+    } else {
+      // World 6: Volcanic Land (Extreme Crags — 14 to 20 blocks)
+      if (l === 1) {
+        // Magma Shell (14 blocks)
+        for (let x = -1; x <= 1; x++) {
+          for (let y = -1; y <= 1; y++) {
+            for (let z = -1; z <= 1; z++) {
+              if (Math.abs(x) + Math.abs(y) + Math.abs(z) === 2) {
+                coords.push(v3(x, y, z));
+              }
+            }
+          }
+        }
+      } else if (l === 2) {
+        // concentric Pit (15 blocks)
         for (let i = 0; i < 8; i++) {
           const a = (i / 8) * Math.PI * 2;
+          coords.push(v3(Math.round(Math.cos(a) * 2), 0, Math.round(Math.sin(a) * 2)));
+        }
+        for (let i = 0; i < 6; i++) {
+          const a = (i / 6) * Math.PI * 2;
           coords.push(v3(Math.round(Math.cos(a) * 1.2), -1, Math.round(Math.sin(a) * 1.2)));
         }
-        for (let y = -2; y <= 2; y++) {
-          coords.push(v3(0, y, 0));
-          coords.push(v3(1, y, 0));
-        }
+        coords.push(v3(0, 1, 0));
       } else if (l === 3) {
-        // Level 3: Volcano Cone with side vents (52 blocks)
-        for (let x = -3; x <= 3; x++) for (let z = -3; z <= 3; z++) {
-          if (Math.abs(x) === 3 || Math.abs(z) === 3) coords.push(v3(x, -1, z));
-        }
+        // Volcano Cone (16 blocks)
         for (let x = -2; x <= 2; x++) for (let z = -2; z <= 2; z++) {
-          if (Math.abs(x) === 2 || Math.abs(z) === 2) coords.push(v3(x, 0, z));
+          if (Math.abs(x) === 2 || Math.abs(z) === 2) coords.push(v3(x, -1, z));
         }
-        for (let x = -1; x <= 1; x++) for (let z = -1; z <= 1; z++) {
-          if (Math.abs(x) === 1 || Math.abs(z) === 1) coords.push(v3(x, 1, z));
-        }
-        coords.push(v3(0, 2, 0)); coords.push(v3(0, -2, 0));
-        coords.push(v3(1, 2, 0)); coords.push(v3(-1, 2, 0));
+        coords.push(v3(0, 0, 0), v3(0, 1, 0), v3(0, 2, 0), v3(1, 0, 0));
       } else if (l === 4) {
-        // Level 4: Interlocking Diagonal Crossbones (58 blocks)
-        for (let i = -4; i <= 4; i++) {
-          coords.push(v3(i, i, 0)); coords.push(v3(i, i, 1));
-          coords.push(v3(-i, i, 0)); coords.push(v3(-i, i, -1));
-          coords.push(v3(0, i, i)); coords.push(v3(1, i, i));
-          coords.push(v3(0, i, -i)); coords.push(v3(-1, i, -i));
+        // Crossbones (18 blocks)
+        for (let i = -2; i <= 2; i++) {
+          coords.push(v3(i, i, 0));
+          coords.push(v3(-i, i, 0));
+          coords.push(v3(0, i, i));
+          coords.push(v3(0, i, -i));
         }
-        coords.push(v3(0, 0, 0)); coords.push(v3(1, 0, 0));
+        coords.push(v3(0, 0, 0), v3(0, 1, 0));
       } else {
-        // Level 5: Dense Doomsday Reactor Matrix (72 blocks)
-        for (let x = -3; x <= 3; x++) {
-          for (let y = -2; y <= 2; y++) {
-            for (let z = -3; z <= 3; z++) {
+        // Reactor Core (20 blocks)
+        for (let x = -2; x <= 2; x++) {
+          for (let y = -1; y <= 1; y++) {
+            for (let z = -2; z <= 2; z++) {
               const d = Math.abs(x) + Math.abs(y) + Math.abs(z);
-              if (d >= 3 && d <= 5) {
+              if (d >= 2 && d <= 3) {
                 coords.push(v3(x, y, z));
               }
             }

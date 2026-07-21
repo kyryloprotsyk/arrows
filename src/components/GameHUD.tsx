@@ -1,18 +1,17 @@
 import React from 'react';
 import { useGameStore } from '../store';
 import { motion, AnimatePresence } from 'framer-motion';
-import { RotateCcw, RotateCw, Home, HelpCircle, RefreshCw } from 'lucide-react';
+import { Home, HelpCircle, RefreshCw, Undo2, Settings } from 'lucide-react';
 
 export const GameHUD: React.FC = () => {
   const {
     movesLeft,
     movesTotal,
-    levelName,
     levelNumberText,
     comboCount,
     setScreen,
     resetLevel,
-    rotateView,
+    undoMove,
     setModal
   } = useGameStore();
 
@@ -21,45 +20,47 @@ export const GameHUD: React.FC = () => {
 
   return (
     <div style={{ position: 'absolute', inset: 0, pointerEvents: 'none', zIndex: 50 }}>
-      {/* Top HUD Containers */}
-      <div className="hud-top-container">
-        {/* Left: MOVES Capsule */}
-        <div className="moves-capsule">
-          <span className="moves-title">Moves</span>
-          <div className="moves-value-container">
-            <span className="moves-star-icon">⭐</span>
-            <span className="moves-value">{movesLeft}</span>
-            <span className="moves-total">/{movesTotal}</span>
+      {/* Top Floating Glassmorphism HUD Bar */}
+      <div className="hud-top-floating-bar">
+        {/* Left: Level Pill + Pause/Settings Cog */}
+        <div className="hud-pill-container" style={{ pointerEvents: 'auto' }}>
+          <div className="hud-floating-pill level-pill">
+            <span className="hud-pill-label">{levelNumberText}</span>
           </div>
+          <motion.button
+            whileHover={{ scale: 1.08 }}
+            whileTap={{ scale: 0.92 }}
+            onClick={() => setModal('help')}
+            className="hud-settings-btn"
+            title="Settings"
+          >
+            <Settings size={18} strokeWidth={2.2} />
+          </motion.button>
         </div>
 
-        {/* Center: Title Capsule + Stars Pill */}
-        <div className="center-hud-group">
-          <div className="level-title-capsule">
-            <span className="level-title-text">
-              {levelNumberText}: {levelName}
+        {/* Center: Moves Remaining */}
+        <div className="hud-pill-container">
+          <div className="hud-floating-pill moves-pill">
+            <span className="moves-star-icon">⚡</span>
+            <span className="hud-pill-label" style={{ fontWeight: 700 }}>
+              {movesLeft} <span style={{ opacity: 0.6, fontWeight: 500 }}>/ {movesTotal}</span>
             </span>
           </div>
-          
-          <div className="star-slots-pill">
-            <span className="star-slot-icon" style={{ opacity: starsEarned >= 1 ? 1 : 0.25 }}>⭐</span>
-            <span className="star-slot-icon" style={{ opacity: starsEarned >= 2 ? 1 : 0.25 }}>⭐</span>
-            <span className="star-slot-icon" style={{ opacity: starsEarned >= 3 ? 1 : 0.25 }}>⭐</span>
-          </div>
         </div>
 
-        {/* Right: STARS Capsule */}
-        <div className="stars-capsule">
-          <span className="stars-title">Stars:</span>
-          <div className="stars-value-container">
-            <span className="moves-star-icon">⭐</span>
-            <span className="stars-value">{starsEarned}</span>
-            <span className="stars-total">/3</span>
+        {/* Right: Stars Earned */}
+        <div className="hud-pill-container">
+          <div className="hud-floating-pill stars-pill">
+            <div className="star-slots-mini">
+              <span className="star-slot-mini-icon" style={{ opacity: starsEarned >= 1 ? 1 : 0.25 }}>⭐</span>
+              <span className="star-slot-mini-icon" style={{ opacity: starsEarned >= 2 ? 1 : 0.25 }}>⭐</span>
+              <span className="star-slot-mini-icon" style={{ opacity: starsEarned >= 3 ? 1 : 0.25 }}>⭐</span>
+            </div>
           </div>
         </div>
       </div>
 
-      {/* Combo Banner Animation Overlay */}
+      {/* Combo Banner Overlay */}
       <AnimatePresence>
         {comboCount >= 2 && (
           <motion.div
@@ -75,76 +76,52 @@ export const GameHUD: React.FC = () => {
         )}
       </AnimatePresence>
 
-      {/* Bottom control capsule panel */}
-      <div className="bottom-hud-bar">
-        {/* Rotate Left Button */}
-        <div className="control-btn-wrapper">
+      {/* Bottom Floating Utility Dock */}
+      <div className="bottom-utility-dock" style={{ pointerEvents: 'auto' }}>
+        <div className="utility-dock-inner">
+          {/* Home */}
           <motion.button
-            whileHover={{ scale: 1.05 }}
-            whileTap={{ scale: 0.9 }}
-            onClick={() => rotateView(-1)}
-            className="btn-gel-control"
-            title="Rotate Left"
-          >
-            <RotateCcw size={22} />
-          </motion.button>
-          <span className="control-btn-label">Rotate Left</span>
-        </div>
-
-        {/* Rotate Right Button */}
-        <div className="control-btn-wrapper">
-          <motion.button
-            whileHover={{ scale: 1.05 }}
-            whileTap={{ scale: 0.9 }}
-            onClick={() => rotateView(1)}
-            className="btn-gel-control"
-            title="Rotate Right"
-          >
-            <RotateCw size={22} />
-          </motion.button>
-          <span className="control-btn-label">Rotate Right</span>
-        </div>
-
-        {/* Home Button */}
-        <div className="control-btn-wrapper">
-          <motion.button
-            whileHover={{ scale: 1.05 }}
-            whileTap={{ scale: 0.9 }}
+            whileHover={{ scale: 1.08 }}
+            whileTap={{ scale: 0.92 }}
             onClick={() => setScreen('menu')}
-            className="btn-gel-control"
+            className="dock-icon-btn"
             title="Home"
           >
-            <Home size={22} />
+            <Home size={20} strokeWidth={2.0} />
           </motion.button>
-          <span className="control-btn-label">Home</span>
-        </div>
 
-        {/* Reset Button (Pink variant) */}
-        <div className="control-btn-wrapper">
+          {/* Undo */}
           <motion.button
-            whileHover={{ scale: 1.05 }}
-            whileTap={{ scale: 0.9 }}
-            onClick={() => resetLevel()}
-            className="btn-gel-control btn-gel-control-pink"
-            title="Reset"
+            whileHover={{ scale: 1.08 }}
+            whileTap={{ scale: 0.92 }}
+            onClick={() => undoMove()}
+            className="dock-icon-btn"
+            title="Undo Move"
           >
-            <RefreshCw size={22} />
+            <Undo2 size={20} strokeWidth={2.0} />
           </motion.button>
-          <span className="control-btn-label">Reset</span>
-        </div>
 
-        {/* Help Button */}
-        <div className="control-btn-wrapper">
+          {/* Reset */}
           <motion.button
-            whileHover={{ scale: 1.05 }}
-            whileTap={{ scale: 0.9 }}
+            whileHover={{ scale: 1.08 }}
+            whileTap={{ scale: 0.92 }}
+            onClick={() => resetLevel()}
+            className="dock-icon-btn dock-icon-btn--reset"
+            title="Reset Level"
+          >
+            <RefreshCw size={20} strokeWidth={2.0} />
+          </motion.button>
+
+          {/* Help / Hint */}
+          <motion.button
+            whileHover={{ scale: 1.08 }}
+            whileTap={{ scale: 0.92 }}
             onClick={() => setModal('help')}
-            className="btn-gel-control"
+            className="dock-icon-btn"
             title="Help"
           >
-            <HelpCircle size={22} />
+            <HelpCircle size={20} strokeWidth={2.0} />
           </motion.button>
-          <span className="control-btn-label">Help</span>
         </div>
       </div>
     </div>
